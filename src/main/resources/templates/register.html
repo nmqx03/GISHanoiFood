@@ -1,148 +1,179 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="vi">
-<head th:replace="fragment/header :: head">
-    <title>Đăng ký - HanoiFood</title>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng ký - WebGIS Ẩm Thực Hà Nội</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body, html {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden; 
+    }
+
+    /* Phần bên trái: Form */
+    .register-section {
+      background-color: #ffffff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 10%; 
+    }
+
+    /* Phần bên phải: Ảnh nền HD Hà Nội */
+    .banner-section {
+      background-image: url('https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=1920&auto=format&fit=crop'); /* Ảnh Tam Cốc chất lượng cao */
+      background-size: cover;
+      background-position: center;
+      height: 100vh;
+      position: relative;
+    }
+    
+    .banner-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.2); /* Lớp phủ mờ giúp ảnh sâu hơn */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      text-align: center;
+    }
+
+    .form-control {
+      background-color: #f3f6f9;
+      border: 1px solid #e1e3ea;
+      height: 45px; 
+      border-radius: 8px;
+    }
+
+    .form-control:focus {
+      background-color: #fff;
+      border-color: #198754;
+      box-shadow: none;
+    }
+
+    .btn-register {
+      background-color: #198754;
+      border: none;
+      height: 50px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .btn-register:hover {
+      background-color: #146c43;
+    }
+
+    @media (max-width: 768px) {
+      .banner-section { display: none; }
+      .register-section { padding: 30px; }
+    }
+  </style>
 </head>
-<body class="bg-light">
+<body>
 
-<div th:replace="fragment/header :: navbar"></div>
+<div class="container-fluid h-100 p-0">
+  <div class="row g-0 h-100">
+    
+    <div class="col-md-6 col-lg-5 register-section">
+      <div class="mb-4">
+        <h2 class="fw-bold text-dark">Tạo tài khoản</h2>
+        <p class="text-secondary">Khám phá ẩm thực Hà Nội cùng chúng tôi</p>
+      </div>
 
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-5">
-            <div class="card shadow">
-                <div class="card-body p-4">
-                    <div class="text-center mb-4">
-                        <i class="fas fa-user-plus fa-3x text-danger mb-2"></i>
-                        <h4 class="fw-bold">Đăng ký tài khoản</h4>
-                        <p class="text-muted small">Tham gia cộng đồng ẩm thực Hà Nội</p>
-                    </div>
+      <div id="alert-box"></div>
 
-                    <div id="errorMsg" class="alert alert-danger d-none"></div>
-                    <div id="successMsg" class="alert alert-success d-none"></div>
-
-                    <form id="registerForm">
-                        <div class="mb-3">
-                            <label class="form-label">Họ và tên</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-user text-danger"></i></span>
-                                <input type="text" class="form-control" id="fullName"
-                                       placeholder="Nguyễn Văn A" required>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-envelope text-danger"></i></span>
-                                <input type="email" class="form-control" id="email"
-                                       placeholder="example@email.com" required>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Mật khẩu</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-lock text-danger"></i></span>
-                                <input type="password" class="form-control" id="password"
-                                       placeholder="Tối thiểu 6 ký tự" required minlength="6">
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePassword('password', 'eye1')">
-                                    <i class="fas fa-eye" id="eye1"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Xác nhận mật khẩu</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-lock text-danger"></i></span>
-                                <input type="password" class="form-control" id="confirmPassword"
-                                       placeholder="Nhập lại mật khẩu" required>
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePassword('confirmPassword', 'eye2')">
-                                    <i class="fas fa-eye" id="eye2"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="d-grid mt-4">
-                            <button type="submit" class="btn btn-danger btn-lg">
-                                <i class="fas fa-user-plus me-2"></i>Đăng ký
-                            </button>
-                        </div>
-                    </form>
-
-                    <hr>
-                    <div class="text-center">
-                        <p class="mb-0">Đã có tài khoản?
-                            <a href="/login" class="text-danger fw-bold">Đăng nhập</a>
-                        </p>
-                    </div>
-                </div>
-            </div>
+      <form id="registerForm">
+        <div class="mb-3">
+          <label class="form-label fw-medium small text-uppercase text-secondary">Họ và tên</label>
+          <input type="text" id="fullName" class="form-control" placeholder="Nguyễn Văn A" required>
         </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-medium small text-uppercase text-secondary">Email</label>
+          <input type="email" id="email" class="form-control" placeholder="name@example.com" required>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-medium small text-uppercase text-secondary">Mật khẩu</label>
+          <input type="password" id="password" class="form-control" placeholder="••••••••" required>
+        </div>
+
+        <button class="btn btn-primary btn-register w-100 text-white" type="submit" id="btn-register">Đăng ký ngay</button>
+      </form>
+
+      <p class="mt-4 text-center text-secondary small">
+        Đã có tài khoản? <a href="login" class="text-success text-decoration-none fw-bold">Đăng nhập</a>
+      </p>
     </div>
+
+    <div class="col-md-6 col-lg-7 banner-section">
+      <div class="banner-overlay">
+        <h1 class="display-4 fw-bold mb-3" style="text-shadow: 2px 2px 10px rgba(0,0,0,0.3);">Ẩm Thực Hà Nội</h1>
+        <p class="lead px-5">Hương vị ngàn năm văn hiến!</p>
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script th:replace="fragment/header :: auth-script"></script>
 <script>
-    if (localStorage.getItem('token')) {
-        window.location.href = '/';
-    }
+    const API_URL = "/api/auth/register";
+    const registerForm = document.getElementById('registerForm');
+    const alertBox = document.getElementById('alert-box');
+    const btnRegister = document.getElementById('btn-register');
 
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fullName        = document.getElementById('fullName').value;
-        const email           = document.getElementById('email').value;
-        const password        = document.getElementById('password').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const originalText = btnRegister.innerHTML;
+      btnRegister.innerHTML = 'Đang xử lý...';
+      btnRegister.disabled = true;
 
-        if (password !== confirmPassword) {
-            showError('Mật khẩu xác nhận không khớp');
+      const fullName = document.getElementById('fullName').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      alertBox.innerHTML = '';
+
+      try {
+          const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ fullName, email, password })
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            alertBox.innerHTML = `<div class="alert alert-danger py-2 small">${data.error || 'Đăng ký thất bại, vui lòng thử lại'}</div>`;
             return;
+          }
+
+          // Lưu thông tin sau khi đăng ký thành công
+          localStorage.setItem('currentUser', JSON.stringify(data));
+          localStorage.setItem('token', data.token);
+
+          alertBox.innerHTML = `<div class="alert alert-success py-2 small">Đăng ký thành công! Đang chuyển hướng...</div>`;
+          setTimeout(() => window.location.href = '/', 1500);
+
+      } catch (error) {
+          console.error("Lỗi:", error);
+          alertBox.innerHTML = `<div class="alert alert-danger py-2 small">Lỗi kết nối máy chủ!</div>`;
+      } finally {
+        if (!alertBox.innerHTML.includes('thành công')) {
+            btnRegister.innerHTML = originalText;
+            btnRegister.disabled = false;
         }
-
-        try {
-            const res = await fetch('http://localhost:8080/api/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fullName, email, password })
-            });
-
-            if (!res.ok) {
-                const err = await res.text();
-                showError(err || 'Email đã tồn tại hoặc lỗi server');
-                return;
-            }
-
-            const data = await res.json();
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('userName', data.fullName || data.email);
-            localStorage.setItem('userRole', data.role);
-
-            document.getElementById('successMsg').textContent = 'Đăng ký thành công! Đang chuyển hướng...';
-            document.getElementById('successMsg').classList.remove('d-none');
-            setTimeout(() => window.location.href = '/', 1500);
-        } catch (err) {
-            showError('Lỗi kết nối server');
-        }
+      }
     });
-
-    function showError(msg) {
-        const el = document.getElementById('errorMsg');
-        el.textContent = msg;
-        el.classList.remove('d-none');
-    }
-
-    function togglePassword(fieldId, iconId) {
-        const field = document.getElementById(fieldId);
-        const icon  = document.getElementById(iconId);
-        if (field.type === 'password') {
-            field.type = 'text';
-            icon.classList.replace('fa-eye', 'fa-eye-slash');
-        } else {
-            field.type = 'password';
-            icon.classList.replace('fa-eye-slash', 'fa-eye');
-        }
-    }
 </script>
+
 </body>
 </html>

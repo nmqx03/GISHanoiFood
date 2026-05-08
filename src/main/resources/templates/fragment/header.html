@@ -1,91 +1,28 @@
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:fragment="head">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; }
-        .navbar-brand { font-weight: bold; color: #e74c3c !important; }
-        .nav-link { color: #333 !important; }
-        .nav-link:hover { color: #e74c3c !important; }
-        #map { height: 600px; width: 100%; border-radius: 12px; }
-        .place-card { border-radius: 12px; transition: transform 0.2s; cursor: pointer; }
-        .place-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
-        .place-card img { height: 180px; object-fit: cover; border-radius: 12px 12px 0 0; }
-        .badge-category { background: #e74c3c; color: white; border-radius: 20px; padding: 3px 10px; font-size: 12px; }
-        .btn-primary { background: #e74c3c; border-color: #e74c3c; }
-        .btn-primary:hover { background: #c0392b; border-color: #c0392b; }
-    </style>
-</head>
+
+<html xmlns:th="http://www.thymeleaf.org"
+	xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <body>
-<nav th:fragment="navbar" class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
-    <div class="container">
-        <a class="navbar-brand" href="/">
-            <i class="fas fa-utensils me-2"></i>HanoiFood
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="/"><i class="fas fa-map me-1"></i>Bản đồ</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/places"><i class="fas fa-store me-1"></i>Quán ăn</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/posts"><i class="fas fa-newspaper me-1"></i>Bài viết</a>
-                </li>
-            </ul>
-            <ul class="navbar-nav" id="authNav">
-                <li class="nav-item" id="loginBtn">
-                    <a class="nav-link" href="/login"><i class="fas fa-sign-in-alt me-1"></i>Đăng nhập</a>
-                </li>
-                <li class="nav-item" id="registerBtn">
-                    <a class="nav-link" href="/register"><i class="fas fa-user-plus me-1"></i>Đăng ký</a>
-                </li>
-                <li class="nav-item dropdown d-none" id="userMenu">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="fas fa-user-circle me-1"></i><span id="userName"></span>
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="/profile"><i class="fas fa-user me-2"></i>Hồ sơ</a></li>
-                        <li><a class="dropdown-item" href="/favorites"><i class="fas fa-heart me-2"></i>Yêu thích</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Đăng xuất</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<script th:fragment="auth-script">
-    // Kiểm tra đăng nhập
-    const token = localStorage.getItem('token');
-    const userName = localStorage.getItem('userName');
-    if (token && userName) {
-        document.getElementById('loginBtn').classList.add('d-none');
-        document.getElementById('registerBtn').classList.add('d-none');
-        document.getElementById('userMenu').classList.remove('d-none');
-        document.getElementById('userName').textContent = userName;
-    }
-
-    function logout() {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userRole');
-        window.location.href = '/';
-    }
-
-    function getAuthHeader() {
-        const token = localStorage.getItem('token');
-        return token ? { 'Authorization': 'Bearer ' + token } : {};
-    }
-</script>
+<div  th:fragment="siteHeader">
+	<div class="logo">
+		<img
+			src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMyYTlkOGYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTggMTNoLTZhMiAyIDAgMCAwLTIgMnYzYTIgMiAwIDAgMCAyIDJoNmEyIDIgMCAwIDAgMi0ydi0zYTIgMiAwIDAgMC0yLTJ6Ij48L3BhdGg+PHBvbHlsaW5lIHBvaW50cz0iMTUsMTAgOSwxMCA5LDQgMTUsNCAxNSw3Ij48L3BvbHlsaW5lPjxsaW5lIHgxPSI5IiB5MT0iMTQiIHgyPSIxNSIgeTI9IjE0Ij48L2xpbmU+PC9zdmc+"
+			alt="Ẩm Thực Hà Nội">
+		<h1>Ẩm Thực Hà Nội</h1>
+	</div>
+	<div class="search-bar">
+		<input type="text" placeholder="Tìm kiếm quán ăn, món ngon Hà Nội...">
+		<button>
+			<i class="fas fa-search"></i>
+		</button>
+	</div>
+	<div class="user-actions">
+		<button id="login-btn">
+			<i class="fas fa-user"></i> Đăng nhập
+		</button>
+		<button id="register-btn">Đăng ký</button>
+	</div>
+</div>
+</div>
+<script src="/js/header.js"></script>
 </body>
 </html>

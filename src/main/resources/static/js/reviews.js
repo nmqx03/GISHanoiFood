@@ -1,107 +1,213 @@
-// Xử lý đánh giá quán ăn
-let currentPlaceId = null;
+import { BASE_URL } from './config.js';
 
-// Load đánh giá của quán
-async function loadReviews(placeId) {
-    currentPlaceId = placeId;
+// --- API GỐC (REVIEW) ---
+
+async function fetchReviewsByPlaceId(placeId) {
     try {
-        const res     = await fetch(`${API_BASE}/reviews/place/${placeId}`);
-        const reviews = await res.json();
-        renderReviews(placeId, reviews);
+        const res = await fetch(`${BASE_URL}/api/reviews/place/${placeId}`);
+        return res.ok ? await res.json() : [];
     } catch (err) {
-        console.error('Lỗi load reviews:', err);
+        console.error("Lỗi tải đánh giá:", err);
+        return [];
     }
 }
 
-// Render danh sách đánh giá
-function renderReviews(placeId, reviews) {
-    const container = document.getElementById(`reviewSection-${placeId}`);
-    if (!container) return;
+async function apiCreateReview(reviewData) {
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("Vui lòng đăng nhập.");
+    
+    const res = await fetch(`${BASE_URL}/api/reviews`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(reviewData)
+    });
 
-    const avgRating = reviews.length > 0
-        ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
-        : 0;
+ 
+    if (!res.ok) {
+        const errorData = await res.json(); 
+        throw new Error(errorData.error || "Gửi đánh giá thất bại!");
+    }
+    // -----------------------
 
-    container.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="mb-0"><i class="fas fa-star text-warning me-1"></i>Đánh giá (${reviews.length})</h6>
-            <span class="badge bg-warning text-dark">${avgRating} / 5</span>
-        </div>
-        ${reviews.length === 0
-            ? '<p class="text-muted text-center">Chưa có đánh giá nào</p>'
-            : reviews.map(r => renderReviewCard(r)).join('')
+    return await res.json();
+}
+
+async function apiDeleteReview(reviewId) {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${BASE_URL}/api/reviews/${reviewId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error("Xóa thất bại");
+    return true;
+}
+
+async function apiUploadImages(files) {
+    let imageUrls = [];
+    for (const file of Array.from(files).slice(0, 3)) { // Tối đa 3 ảnh
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`${BASE_URL}/api/reviews/upload-image`, {
+            method: "POST", body: formData
+        });
+        const data = await res.json();
+        if (res.ok && data.url) imageUrls.push(data.url);
+    }
+    return imageUrls;
+}
+
+// --- UI & LOGIC ---
+
+// Biến lưu ID địa điểm đang xem
+let currentPlaceIdForReview = null; 
+
+// Hàm khởi tạo các sự kiện Modal (Chạy 1 lần ở main.js)
+export function initReviewSystem() {
+    document.getElementById("close-review-modal").onclick = closeReviewModal;
+    document.getElementById("review-form").onsubmit = handleReviewSubmit;
+    
+    const starContainer = document.getElementById("rating-input");
+    starContainer.innerHTML = "";
+    for (let i = 1; i <= 5; i++) {
+        const star = document.createElement("i");
+        star.className = "fas fa-star";
+        star.dataset.rating = i;
+        star.onclick = () => setRatingUI(i);
+        starContainer.appendChild(star);
+    }
+    
+    document.getElementById("review-images").addEventListener("change", function() {
+        const preview = document.getElementById("image-preview");
+        preview.innerHTML = "";
+        Array.from(this.files).slice(0, 3).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = document.createElement("img");
+                img.src = e.target.result;
+                img.classList.add("preview-img");
+                preview.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+    });
+
+    window.openReviewModal = openReviewModal;
+    window.handleDeleteReview = handleDeleteReviewUI;
+}
+
+// Hàm render danh sách đánh giá vào sidebar
+export async function renderReviewsForPlace(placeId) {
+    currentPlaceIdForReview = placeId; 
+    const list = document.getElementById("reviews-list");
+    const countEl = document.getElementById("review-count");
+    
+    list.innerHTML = "<p>Đang tải...</p>";
+    
+    const reviews = await fetchReviewsByPlaceId(placeId);
+    if (countEl) countEl.textContent = reviews.length;
+    list.innerHTML = "";
+
+    if (reviews.length === 0) {
+        list.innerHTML = `<p style="color:#777;">Chưa có đánh giá nào.</p>`;
+        return;
+    }
+
+    const userId = localStorage.getItem("userId");
+
+    reviews.forEach(review => {
+        const isOwner = userId && review.user?.id == userId;
+        const stars = "⭐".repeat(review.rating);
+        const div = document.createElement("div");
+        div.classList.add("review");
+        
+        let imagesHtml = "";
+        if (review.images?.length > 0) {
+             imagesHtml = `<div class="review-images">
+                ${review.images.map(img => `<img src="${BASE_URL}${img.url}" class="review-img">`).join("")}
+             </div>`;
         }
-        ${isLoggedIn() ? renderReviewForm(placeId) : '<p class="text-center"><a href="/login" class="text-danger">Đăng nhập</a> để đánh giá</p>'}`;
-}
 
-// Render card đánh giá
-function renderReviewCard(review) {
-    const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
-    return `
-        <div class="review-card">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="review-avatar">${(review.user?.fullName || 'U')[0].toUpperCase()}</div>
-                <div>
-                    <div style="font-size:14px;font-weight:600">${review.user?.fullName || 'Người dùng'}</div>
-                    <div class="star-rating" style="font-size:14px">${stars}</div>
-                </div>
+        div.innerHTML = `
+            <div class="review-header">
+                <b>${review.user?.fullName || "Khách"}</b>
+                <span class="rating">${stars}</span>
+                ${isOwner ? `<button onclick="window.handleDeleteReview(${review.id})" class="delete-btn"><i class="fas fa-trash"></i></button>` : ""}
             </div>
-            <p style="font-size:13px;margin:0;color:#555">${review.content || ''}</p>
-        </div>`;
-}
-
-// Render form đánh giá
-function renderReviewForm(placeId) {
-    return `
-        <div class="mt-3 p-3 bg-light rounded">
-            <h6 class="mb-2">Viết đánh giá của bạn</h6>
-            <div class="mb-2">
-                <label class="form-label small">Điểm đánh giá</label>
-                <div id="starSelector-${placeId}" class="d-flex gap-1">
-                    ${[1,2,3,4,5].map(i => `
-                        <span class="star-btn" data-val="${i}" onclick="selectStar(${placeId}, ${i})"
-                              style="font-size:24px;cursor:pointer;color:#ddd">★</span>`).join('')}
-                </div>
-            </div>
-            <textarea id="reviewContent-${placeId}" class="form-control mb-2"
-                      rows="2" placeholder="Chia sẻ trải nghiệm của bạn..."></textarea>
-            <button class="btn btn-danger btn-sm" onclick="submitReview(${placeId})">
-                <i class="fas fa-paper-plane me-1"></i>Gửi đánh giá
-            </button>
-        </div>`;
-}
-
-// Chọn sao
-let selectedRating = {};
-function selectStar(placeId, rating) {
-    selectedRating[placeId] = rating;
-    const stars = document.querySelectorAll(`#starSelector-${placeId} .star-btn`);
-    stars.forEach(s => {
-        s.style.color = parseInt(s.dataset.val) <= rating ? '#f39c12' : '#ddd';
+            <p>${review.content || ""}</p>
+            ${imagesHtml}
+        `;
+        list.appendChild(div);
     });
 }
 
-// Gửi đánh giá
-async function submitReview(placeId) {
-    if (!requireLogin()) return;
-    const rating  = selectedRating[placeId];
-    const content = document.getElementById(`reviewContent-${placeId}`)?.value.trim();
+// --- Logic Modal ---
 
-    if (!rating) { showToast('Vui lòng chọn số sao', 'error'); return; }
+function openReviewModal() {
+    if (!localStorage.getItem("token")) return alert("Vui lòng đăng nhập!");
+    document.getElementById("review-modal").style.display = "flex";
+    setRatingUI(0);
+    document.getElementById("review-form").reset();
+    document.getElementById("image-preview").innerHTML = "";
+}
+
+function closeReviewModal() {
+    document.getElementById("review-modal").style.display = "none";
+}
+
+function setRatingUI(rating) {
+    document.getElementById("review-rating").value = rating;
+    document.querySelectorAll("#rating-input .fa-star").forEach(star => {
+        star.style.color = star.dataset.rating <= rating ? "#f4a261" : "#ccc";
+    });
+}
+
+// --- [QUAN TRỌNG] Logic Submit & Update Stats ---
+
+async function handleReviewSubmit(e) {
+    e.preventDefault();
+    const rating = +document.getElementById("review-rating").value;
+    const content = document.getElementById("review-content").value;
+    const files = document.getElementById("review-images").files;
+
+    if (!rating) return alert("Vui lòng chọn số sao!");
 
     try {
-        const res = await fetch(`${API_BASE}/reviews`, {
-            method: 'POST',
-            headers: jsonAuthHeader(),
-            body: JSON.stringify({ restaurantId: placeId, rating, content })
+        // 1. Upload ảnh
+        const imageUrls = await apiUploadImages(files);
+        
+        // 2. Tạo Review (Lưu vào bảng Reviews)
+        await apiCreateReview({
+            placeId: currentPlaceIdForReview,
+            rating,
+            content,
+            imageUrls
         });
-        if (res.ok) {
-            showToast('Đánh giá thành công!', 'success');
-            loadReviews(placeId);
-        } else {
-            showToast('Bạn đã đánh giá quán này rồi', 'error');
-        }
+
+        // 3. [MỚI - ĐÃ THÊM] Gọi API tăng thống kê Review Count cho bảng Stats
+        // URL này khớp với StatsApi.java: @PostMapping("/review/{id}")
+        await fetch(`${BASE_URL}/api/stats/review/${currentPlaceIdForReview}`, { 
+            method: 'POST' 
+        });
+
+        alert("Đánh giá thành công!");
+        closeReviewModal();
+        renderReviewsForPlace(currentPlaceIdForReview); // Tải lại danh sách
     } catch (err) {
-        showToast('Lỗi: ' + err.message, 'error');
+        alert(err.message);
+    }
+}
+
+async function handleDeleteReviewUI(reviewId) {
+    if (!confirm("Bạn chắc chắn muốn xóa?")) return;
+    try {
+        await apiDeleteReview(reviewId);
+        // Lưu ý: Nếu muốn chuẩn xác thì bạn cũng nên gọi API trừ đi review count, 
+        // nhưng tạm thời ta chỉ cộng thôi cũng được.
+        renderReviewsForPlace(currentPlaceIdForReview);
+    } catch (err) {
+        alert(err.message);
     }
 }

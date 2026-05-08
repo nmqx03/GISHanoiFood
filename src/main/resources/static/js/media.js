@@ -1,53 +1,38 @@
-// Xử lý upload file ảnh
-async function uploadImage(file) {
-    if (!file) return null;
-    const formData = new FormData();
-    formData.append('file', file);
+// js/media.js
+export function initMediaModal() {
+    // Setup sự kiện đóng modal
+    const modal = document.getElementById("media-modal");
+    document.getElementById("close-media").onclick = hideMediaModal;
+    modal.onclick = (e) => { if (e.target === modal) hideMediaModal(); };
 
-    try {
-        const res = await fetch(`${API_BASE}/files/upload`, {
-            method: 'POST',
-            headers: authHeader(),
-            body: formData
-        });
-        if (!res.ok) throw new Error('Upload thất bại');
-        const data = await res.json();
-        return data.url;
-    } catch (err) {
-        showToast('Lỗi upload ảnh: ' + err.message, 'error');
-        return null;
-    }
+    // Expose ra window để HTML gọi được
+    window.playVideo = playVideo;
+    window.playAudio = playAudio;
 }
 
-// Preview ảnh trước khi upload
-function previewImage(inputId, previewId) {
-    const input   = document.getElementById(inputId);
-    const preview = document.getElementById(previewId);
-    if (!input || !preview) return;
-
-    input.addEventListener('change', () => {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            preview.src     = e.target.result;
-            preview.style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-    });
+function showMediaModal() {
+    const modal = document.getElementById("media-modal");
+    modal.style.display = "flex";
+    setTimeout(() => { modal.style.opacity = "1"; }, 10);
 }
 
-// Kiểm tra kích thước file
-function validateImageFile(file, maxSizeMB = 5) {
-    if (!file) return false;
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-        showToast('Chỉ chấp nhận file ảnh (JPG, PNG, WEBP)', 'error');
-        return false;
-    }
-    if (file.size > maxSizeMB * 1024 * 1024) {
-        showToast(`Ảnh không được vượt quá ${maxSizeMB}MB`, 'error');
-        return false;
-    }
-    return true;
+function hideMediaModal() {
+    const modal = document.getElementById("media-modal");
+    modal.style.opacity = "0";
+    setTimeout(() => {
+        modal.style.display = "none";
+        document.getElementById("media-container").innerHTML = ""; // Xóa nội dung để dừng phát
+    }, 300);
+}
+
+function playVideo(url) {
+    if (!url) return alert("Không có video.");
+    document.getElementById("media-container").innerHTML = `<iframe src="${url}" allowfullscreen style="width:100%; height:300px; border:none;"></iframe>`;
+    showMediaModal();
+}
+
+function playAudio(url) {
+    if (!url) return alert("Không có audio.");
+    document.getElementById("media-container").innerHTML = `<audio controls autoplay src="${url}" style="width:100%"></audio>`;
+    showMediaModal();
 }

@@ -1,76 +1,54 @@
-// Các hàm tiện ích dùng chung cho toàn bộ ứng dụng
+import { checkLoginStatus } from './auth.js';
+import { initPlacesSystem } from './places.js';
+import { initReviewSystem } from './reviews.js';
+import { initMediaModal } from './media.js';
+import { initGisInputs } from './gis.js';
+import { initPostSystem } from './posts.js'; 
+import { renderMarkers } from './map.js'; 
+import { initChatSystem } from './ai.js'; 
+import './profile.js'; 
+import { initHotPlacesSystem } from './hotPlaces.js';
 
-// Hiển thị loading overlay
-function showLoading(show) {
-    let overlay = document.getElementById('loadingOverlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id        = 'loadingOverlay';
-        overlay.className = 'loading-overlay';
-        overlay.innerHTML = '<div class="spinner"></div>';
-        document.body.appendChild(overlay);
-    }
-    overlay.style.display = show ? 'flex' : 'none';
-}
+// 1. IMPORT Module Đặc sản mới
+import { initSpecialtiesSystem } from './specialties.js'; 
 
-// Hiển thị toast thông báo
-function showToast(message, type = 'success') {
-    let container = document.getElementById('toastContainer');
-    if (!container) {
-        container = document.createElement('div');
-        container.id        = 'toastContainer';
-        container.className = 'toast-container';
-        document.body.appendChild(container);
-    }
+// Khởi chạy ứng dụng
+document.addEventListener("DOMContentLoaded", async () => {
+    console.log("App starting...");
 
-    const toast = document.createElement('div');
-    toast.className = `toast-custom toast-${type}`;
-    toast.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
-        ${message}`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
+    // 1. Kiểm tra đăng nhập (Auth & Profile UI state)
+    checkLoginStatus();
 
-// Format tiền tệ
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-}
+    // 2. Khởi tạo Chatbot
+    initChatSystem(); 
 
-// Format ngày giờ
-function formatDate(dateStr) {
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
-        year: 'numeric', month: 'long', day: 'numeric'
-    });
-}
+    // 3. Khởi tạo Media
+    initMediaModal();
 
-// Truncate text
-function truncate(text, maxLength = 100) {
-    if (!text) return '';
-    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-}
+    // 4. Khởi tạo Review
+    initReviewSystem();
+    
+    // 5. Khởi tạo Hệ thống Tin tức (Posts)
+    initPostSystem(); 
+	
+    // 6. Khởi tạo Địa điểm Hot
+    initHotPlacesSystem(); 
 
-// Debounce
-function debounce(fn, delay = 300) {
-    let timer;
-    return (...args) => {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn(...args), delay);
-    };
-}
+    // 7. KHỞI TẠO Hệ thống Đặc sản & Quà tặng
 
-// Tìm kiếm với debounce
-const debouncedSearch = debounce(() => {
-    if (typeof searchPlaces === 'function') searchPlaces();
-}, 400);
+    initSpecialtiesSystem(); 
 
-// Lắng nghe input tìm kiếm
-document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', debouncedSearch);
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && typeof searchPlaces === 'function') searchPlaces();
-        });
+    // 8. Khởi tạo Địa điểm & GIS
+    const data = await initPlacesSystem();
+
+    if (data && data.places) {
+        console.log("Dữ liệu đã tải:", data.places.length, "địa điểm.");
+
+        renderMarkers(data.places); 
+
+        console.log("Initializing GIS with data...");
+        initGisInputs(data.places, data.categories);
+    } else {
+        console.error("Không nhận được dữ liệu từ initPlacesSystem");
     }
 });
