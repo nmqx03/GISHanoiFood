@@ -23,12 +23,12 @@ public class JwtUtil {
     // Sinh token có userId + email + role
     public String generateToken(Long userId, String email, String role) {
         return Jwts.builder()
-                .setSubject(email)                 // email làm subject
-                .claim("userId", userId)           // thêm userId
-                .claim("role", role)               // thêm role
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION))
-                .signWith(key)  // ký bằng secret key
+                .subject(email)
+                .claim("userId", userId)
+                .claim("role", role)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION))
+                .signWith(key)
                 .compact();
     }
     
