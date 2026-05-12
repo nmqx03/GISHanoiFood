@@ -45,6 +45,10 @@ public class ChatApi {
             chat.setQuestion(question);
             chat.setAnswer(aiResponse.getText());
 
+            // Thiết lập role (mặc định là USER nếu không truyền)
+            String role = (String) payload.getOrDefault("role", "USER");
+            chat.setRole(role);
+
             //  Phân loại tin nhắn dựa trên flag của AI
             if (aiResponse.isItinerary()) {
                 chat.setMessageType("ITINERARY");
@@ -54,7 +58,6 @@ public class ChatApi {
                 chat.setStructuredData(null);
             }
 
-         
             Chat savedChat = chatRepository.save(chat);
 
    

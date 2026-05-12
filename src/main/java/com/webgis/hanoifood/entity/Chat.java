@@ -20,15 +20,12 @@ public class Chat {
     private String answer;
 
     // Cột message trong DB = alias của question (để tương thích schema cũ)
-    // Dùng insertable=false, updatable=false để JPA không ghi đè
-    @Column(name = "message", columnDefinition = "TEXT",
-            insertable = false, updatable = false)
+    @Column(name = "message", columnDefinition = "TEXT")
     private String message;
 
-    // Cột role trong DB, mặc định 'USER' (set ở DB level)
-    // Dùng insertable=false, updatable=false để JPA không cần truyền
-    @Column(name = "role", insertable = false, updatable = false)
-    private String role;
+    // Cột role trong DB, mặc định 'USER'
+    @Column(name = "role")
+    private String role = "USER";
 
     @Column(name = "message_type")
     private String messageType;
@@ -43,10 +40,12 @@ public class Chat {
         this.createdAt = LocalDateTime.now();
     }
 
-    public Chat(Long userId, String question, String answer, String messageType, String structuredData) {
+    public Chat(Long userId, String question, String answer, String role, String messageType, String structuredData) {
         this.userId = userId;
         this.question = question;
+        this.message = question; // Đồng bộ message
         this.answer = answer;
+        this.role = role != null ? role : "USER";
         this.messageType = messageType;
         this.structuredData = structuredData;
         this.createdAt = LocalDateTime.now();
@@ -59,14 +58,19 @@ public class Chat {
     public void setUserId(Long userId) { this.userId = userId; }
 
     public String getQuestion() { return question; }
-    public void setQuestion(String question) { this.question = question; }
+    public void setQuestion(String question) {
+        this.question = question;
+        this.message = question; // Đồng bộ với message
+    }
 
     public String getAnswer() { return answer; }
     public void setAnswer(String answer) { this.answer = answer; }
 
     public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
 
     public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 
     public String getMessageType() { return messageType; }
     public void setMessageType(String messageType) { this.messageType = messageType; }
