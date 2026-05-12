@@ -14,12 +14,17 @@ public class FavoritePlace {
     @Column(name = "user_id")
     private Long userId;
 
+    // Cột place_id: dùng chính trong code hiện tại
     @Column(name = "place_id")
     private Long placeId;
 
+    // Cột restaurant_id: còn trong DB (dữ liệu cũ), không dùng nữa
+    // insertable=false, updatable=false để JPA không ghi vào cột này
+    @Column(name = "restaurant_id", insertable = false, updatable = false)
+    private Integer restaurantId;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
-
 
     public FavoritePlace() {
     }
@@ -30,36 +35,17 @@ public class FavoritePlace {
         this.createdAt = LocalDateTime.now();
     }
 
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public Long getId() {
-        return id;
-    }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public Long getPlaceId() { return placeId; }
+    public void setPlaceId(Long placeId) { this.placeId = placeId; }
 
-    public Long getUserId() {
-        return userId;
-    }
+    public Integer getRestaurantId() { return restaurantId; }
 
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    public Long getPlaceId() {
-        return placeId;
-    }
-
-    public void setPlaceId(Long placeId) {
-        this.placeId = placeId;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

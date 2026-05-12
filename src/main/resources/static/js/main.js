@@ -1,54 +1,61 @@
 import { checkLoginStatus } from './auth.js';
 import { initPlacesSystem } from './places.js';
 import { initReviewSystem } from './reviews.js';
-import { initMediaModal } from './media.js';
-import { initGisInputs } from './gis.js';
-import { initPostSystem } from './posts.js'; 
-import { renderMarkers } from './map.js'; 
-import { initChatSystem } from './ai.js'; 
-import './profile.js'; 
+import { initChatSystem } from './ai.js';
+import { initGisInputs, handleBufferAnalysis, handleNearMe, switchGisTab } from './gis.js';
+import { initSpecialtiesSystem } from './specialties.js';
 import { initHotPlacesSystem } from './hotPlaces.js';
+import './profile.js';
 
-// 1. IMPORT Module Đặc sản mới
-import { initSpecialtiesSystem } from './specialties.js'; 
+window.handleBufferAnalysis = handleBufferAnalysis;
+window.handleNearMe         = handleNearMe;
+window.switchGisTab         = switchGisTab;
 
-// Khởi chạy ứng dụng
-document.addEventListener("DOMContentLoaded", async () => {
-    console.log("App starting...");
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('App starting...');
 
-    // 1. Kiểm tra đăng nhập (Auth & Profile UI state)
-    checkLoginStatus();
+  checkLoginStatus();
+  initReviewSystem();
+  initChatSystem();
 
-    // 2. Khởi tạo Chatbot
-    initChatSystem(); 
+  // Sidebar nav actions
+  document.querySelectorAll('.sb-item[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sb-nav .sb-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const action = btn.dataset.action;
+      if (action === 'hot')          document.getElementById('hot-modal')?.classList.add('open');
+      if (action === 'specialties')  document.getElementById('specialties-modal')?.classList.add('open');
+      if (action === 'posts')        document.getElementById('posts-modal')?.classList.add('open');
+      if (action === 'ai')           document.getElementById('chat-sidebar')?.classList.add('active');
+      if (action === 'favorites')    document.getElementById('fav-modal')?.classList.add('open');
+      if (action === 'itineraries')  {
+        document.getElementById('profile-modal')?.classList.add('open');
+        if (window.switchProfileTab) window.switchProfileTab('itinerary');
+      }
+    });
+  });
 
-    // 3. Khởi tạo Media
-    initMediaModal();
+  document.getElementById('btn-gis')?.addEventListener('click', () => {
+    document.getElementById('gis-modal')?.classList.add('open');
+  });
 
-    // 4. Khởi tạo Review
-    initReviewSystem();
-    
-    // 5. Khởi tạo Hệ thống Tin tức (Posts)
-    initPostSystem(); 
-	
-    // 6. Khởi tạo Địa điểm Hot
-    initHotPlacesSystem(); 
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
 
-    // 7. KHỞI TẠO Hệ thống Đặc sản & Quà tặng
+  document.getElementById('close-chat')?.addEventListener('click', () => {
+    document.getElementById('chat-sidebar')?.classList.remove('active');
+  });
 
-    initSpecialtiesSystem(); 
+  const data = await initPlacesSystem();
+  if (!data) return;
 
-    // 8. Khởi tạo Địa điểm & GIS
-    const data = await initPlacesSystem();
+  initHotPlacesSystem();
+  initSpecialtiesSystem();
+  initGisInputs(data.places, data.categories);
 
-    if (data && data.places) {
-        console.log("Dữ liệu đã tải:", data.places.length, "địa điểm.");
-
-        renderMarkers(data.places); 
-
-        console.log("Initializing GIS with data...");
-        initGisInputs(data.places, data.categories);
-    } else {
-        console.error("Không nhận được dữ liệu từ initPlacesSystem");
-    }
+  console.log('Loaded:', data.places.length, 'places');
 });

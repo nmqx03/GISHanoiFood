@@ -1,292 +1,398 @@
-import { BASE_URL , OPENWEATHER_API_KEY } from './config.js';
-import { renderMarkers } from './map.js';
-import { renderReviewsForPlace } from './reviews.js';
+import { BASE_URL, getImageUrl, PLACEHOLDER_IMG } from './config.js';
+window.__ph = PLACEHOLDER_IMG;
 import { getCurrentUser } from './auth.js';
-import { initFavoriteSystem, getFavoriteStatus } from './tym.js';
+import { initFavoriteSystem, getFavoriteStatus, handleToggleFavorite } from './tym.js';
+
+const CAT_COLORS = ['#d76a3a','#c08a2a','#7a8a3a','#7d4a8a','#3a6a8a','#3a8a6a','#8a3a6a','#6a8a3a'];
 
 let allPlaces = [];
 let allCategories = [];
+let currentPlaceId = null;
+let mapMarkers = {};
+let routingControl = null;
+let userPosition = null;
+export let map = null;  // sẽ được khởi tạo trong initPlacesSystem()
 
-async function fetchCategories() {
-    try {
-        const res = await fetch(`${BASE_URL}/api/categories`);
-        return await res.json();
-    } catch (e) { return []; }
+function initMap() {
+  if (map) return map;  // nếu đã init thì return luôn
+  const mapEl = document.getElementById('map');
+  if (!mapEl) {
+    console.error('Map container #map not found');
+    return null;
+  }
+
+  map = L.map('map', { zoomControl: false, attributionControl: true })
+    .setView([21.0285, 105.8542], 13);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19, subdomains: 'abcd'
+  }).addTo(map);
+
+  // Zoom controls
+  document.getElementById('z-in')?.addEventListener('click',  () => map.zoomIn());
+  document.getElementById('z-out')?.addEventListener('click', () => map.zoomOut());
+  document.getElementById('z-c')?.addEventListener('click',   () => map.flyTo([21.0285, 105.8542], 13, { duration: .7 }));
+
+  // Locate button
+  document.getElementById('locate-btn')?.addEventListener('click', () => {
+    if (!navigator.geolocation) return alert('Trình duyệt không hỗ trợ GPS');
+    navigator.geolocation.getCurrentPosition(pos => {
+      userPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      map.flyTo([pos.coords.latitude, pos.coords.longitude], 16, { duration: 1 });
+      renderPanelList(allPlaces);
+    }, () => alert('Không lấy được vị trí'));
+  });
+
+  return map;
 }
 
-async function fetchPlaces() {
-    try {
-        const res = await fetch(`${BASE_URL}/api/places`);
-        return await res.json();
-    } catch (e) { return []; }
+function makePin(color, active = false) {
+  const html = `<div class="pin ${active ? 'active' : ''}">
+    <div class="pulse" style="background:${color}"></div>
+    <div class="pbody" style="background:${color}"><i class="fas fa-utensils"></i></div>
+  </div>`;
+  return L.divIcon({ className: 'pin-wrap', html, iconSize: [34, 42], iconAnchor: [17, 42] });
 }
 
-async function fetchEventsByPlace(placeId) {
-    try {
-        const res = await fetch(`${BASE_URL}/api/events/place/${placeId}`);
-        if (!res.ok) return [];
-        return await res.json();
-    } catch (e) { return []; }
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// API lấy dữ liệu Hot 
-export async function fetchHotStats() {
-    try {
-        const res = await fetch(`${BASE_URL}/api/stats/hot`);
-        if (!res.ok) return [];
-        return await res.json();
-    } catch (e) {
-        console.warn("Lỗi tải dữ liệu Hot:", e);
-        return [];
-    }
-}
+async function fetchCategories() { try { return await (await fetch(`${BASE_URL}/api/categories`)).json(); } catch { return []; } }
+async function fetchPlaces()     { try { return await (await fetch(`${BASE_URL}/api/places`)).json();     } catch { return []; } }
+async function fetchEvents(id)   { try { const r = await fetch(`${BASE_URL}/api/events/place/${id}`);  return r.ok ? await r.json() : []; } catch { return []; } }
+async function fetchReviews(id)  { try { const r = await fetch(`${BASE_URL}/api/reviews/place/${id}`); return r.ok ? await r.json() : []; } catch { return []; } }
+async function incrementView(id) { try { await fetch(`${BASE_URL}/api/stats/view/${id}`, { method: 'POST' }); } catch {} }
 
-// API tăng view 
-export async function incrementViewCount(placeId) {
-    try {
-        await fetch(`${BASE_URL}/api/stats/view/${placeId}`, { method: 'POST' });
-        console.log(`View +1 cho ID: ${placeId}`);
-    } catch (e) { console.error(e); }
-}
-
-
-async function getWeather(lat, lon) {
-    if (!OPENWEATHER_API_KEY || OPENWEATHER_API_KEY.includes('DÁN_KEY')) {
-        console.warn("Chưa có API Key thời tiết");
-        return null;
-    }
-
-    try {
-      
-		const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=vi`;
-        
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Lỗi API Thời tiết');
-        return await res.json();
-    } catch (e) {
-        console.error("Không lấy được thời tiết:", e);
-        return null; 
-    }
-}
-
-//khởi tạo
 export async function initPlacesSystem() {
-    // Chỉ tải Places và Categories (Không cần preload Hot Stats cho Map nữa)
+  console.log('initPlacesSystem starting...');
+
+  // 1. Init map FIRST (cần DOM sẵn)
+  if (!initMap()) {
+    console.error('Map init failed');
+    return null;
+  }
+
+  // 2. Load data
+  try {
     [allCategories, allPlaces] = await Promise.all([fetchCategories(), fetchPlaces()]);
+    console.log('Loaded', allCategories.length, 'categories,', allPlaces.length, 'places');
+  } catch (e) {
+    console.error('Load data failed:', e);
+    return null;
+  }
 
-    // Render Map bình thường
-    renderMarkers(allPlaces);
+  // 3. Build UI
+  buildCategoryNav();
+  buildChips();
+  buildLegend();
+  renderPanelList(allPlaces);
+  renderAllMarkers(allPlaces);
+  initFavoriteSystem(allPlaces);
+  setupSearch();
 
-    renderCategoryDropdown();
-    setupSearch();
-	initFavoriteSystem(allPlaces);
-	
-    const toggleBtn = document.getElementById('toggle-sidebar');
-    const closeBtn = document.getElementById('close-sidebar');
-    if(toggleBtn) toggleBtn.onclick = () => document.getElementById('sidebar').classList.toggle('open');
-    if(closeBtn) closeBtn.onclick = () => document.getElementById('sidebar').classList.remove('open');
+  window.showLocationDetails = showDetail;
+  window.closeDetail = closeDetail;
+  window.showRouteTo = showRoute;
 
-    window.showLocationDetails = showLocationDetails;
-
-    return { places: allPlaces, categories: allCategories };
+  return { places: allPlaces, categories: allCategories };
 }
 
-
-async function showLocationDetails(placeId) {
-    const place = allPlaces.find(p => p.id === placeId);
-    if (!place) return;
-
-    incrementViewCount(placeId);
-
-    const details = document.getElementById("location-details");
-    document.getElementById("routing-details").style.display = "none";
-    details.style.display = "block";
-   
-    // Gọi hàm Check từ file tym.js
-	const isFav = await getFavoriteStatus(placeId);
-	const heartClass = isFav ? 'fas' : 'far'; 
-	const heartColor = isFav ? '#e63946' : '#555'; 
-	
-    details.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
-            <h2 style="margin: 0; padding-right: 10px; font-size: 1.5rem; color: #2c3e50; line-height: 1.2;">
-                ${place.name}
-            </h2>
-            
-            <button onclick="window.handleToggleFavorite(${place.id}, this)" 
-                    title="${isFav ? 'Bỏ thích' : 'Yêu thích'}"
-                    style="background: none; border: none; cursor: pointer; padding: 5px; transition: transform 0.2s;">
-                <i class="${heartClass} fa-heart" style="font-size: 24px; color: ${heartColor};"></i>
-            </button>
-        </div>
-        
-        <img src="${BASE_URL}/${place.imageUrl}" style="width:100%; height: 200px; object-fit:cover; border-radius:8px;" onerror="this.src='./img/placeholder.jpg'"/>
-		
-        <div id="weather-widget-${placeId}">Loading weather...</div>
-        <p style="margin-top: 10px;">${place.description || "Chưa có mô tả."}</p>
-		<p style="
-		  margin-top: 10px;
-		  font-size: 14px;
-		  color: #555;
-		  font-weight: 500;
-		  display: flex;
-		  align-items: center;
-		  gap: 6px;
-		">
-		   ${place.location || "Hà Nội"}
-		</p>
-
-        
-        <div class="events-section" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-            <h3>Sự kiện sắp tới</h3>
-            <div id="events-list">Đang tải sự kiện...</div>
-        </div>
-
-        <div class="action-buttons">
-            <button onclick="window.playVideo('${place.videoUrl || ""}')"><i class="fas fa-play-circle"></i> Video</button>
-            <button onclick="window.playAudio('${place.audioUrl || ""}')"><i class="fas fa-volume-up"></i> Audio</button>
-            <button onclick="window.showRouteTo(${place.latitude}, ${place.longitude})"><i class="fas fa-road"></i> Chỉ đường</button>
-        </div>
-
-        <div class="reviews" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-            <h3>Đánh giá</h3>
-            <button onclick="window.openReviewModal()" class="review-button" style="margin-top:5px; padding:6px 12px; background:#2a9d8f; color:#fff; border:none; border-radius:6px;">
-                <i class="fas fa-edit"></i> Viết đánh giá
-            </button>
-            <div id="reviews-list" style="margin-top:15px;"></div>
-        </div>
-    `;
-
-    document.getElementById("sidebar").classList.add("open");
-
-    renderReviewsForPlace(placeId);
-    loadPlaceEvents(placeId);
-    renderWeatherForPlace(place.latitude, place.longitude, placeId);
-}
-
-async function loadPlaceEvents(placeId) {
-    const container = document.getElementById('events-list');
-    const events = await fetchEventsByPlace(placeId);
-    if (!events || events.length === 0) {
-        container.innerHTML = `<p style="color: #666; font-size: 0.9em;">Hiện chưa có sự kiện nào tại địa điểm này.</p>`;
-        return;
-    }
-    let html = '';
-    events.forEach(event => {
-        const startDate = new Date(event.startDate).toLocaleDateString('vi-VN');
-        const endDate = new Date(event.endDate).toLocaleDateString('vi-VN');
-        html += `
-            <div class="event-card">
-                <div class="event-date">
-                    <span class="day">${new Date(event.startDate).getDate()}</span>
-                    <span class="month">Th${new Date(event.startDate).getMonth() + 1}</span>
-                </div>
-                <div class="event-info">
-                    <h4>${event.eventName}</h4>
-                    <p class="event-time"><i class="far fa-clock"></i> ${startDate} - ${endDate}</p>
-                    <p class="event-desc">${event.description || ''}</p>
-                </div>
-            </div>`;
+function buildCategoryNav() {
+  const nav = document.getElementById('category-nav');
+  if (!nav) return;
+  nav.innerHTML = '';
+  allCategories.forEach((cat, i) => {
+    const color = CAT_COLORS[i % CAT_COLORS.length];
+    const count = allPlaces.filter(p => p.category?.id === cat.id).length;
+    const btn = document.createElement('button');
+    btn.className = 'sb-item';
+    btn.innerHTML = `<span class="ic"><span class="cat-dot" style="background:${color}"></span></span><span>${cat.name}</span><span class="badge">${count}</span>`;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#category-nav .sb-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filtered = allPlaces.filter(p => p.category?.id === cat.id);
+      renderPanelList(filtered);
+      renderAllMarkers(filtered);
     });
-    container.innerHTML = html;
+    nav.appendChild(btn);
+  });
 }
 
-async function renderWeatherForPlace(lat, lon, placeId) {
-    const container = document.getElementById(`weather-widget-${placeId}`);
-    if (!container) return;
+function buildChips() {
+  const chips = document.getElementById('chips');
+  if (!chips) return;
+  chips.innerHTML = `<button class="chip on" data-cat=""><i class="fas fa-circle-check"></i>Tất cả</button>`;
+  allCategories.slice(0, 5).forEach(cat => {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.dataset.cat = cat.id;
+    chip.textContent = cat.name;
+    chips.appendChild(chip);
+  });
+  chips.addEventListener('click', e => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    chips.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+    btn.classList.add('on');
+    const catId = btn.dataset.cat;
+    const filtered = catId ? allPlaces.filter(p => p.category?.id == catId) : allPlaces;
+    renderPanelList(filtered);
+    renderAllMarkers(filtered);
+  });
+}
 
-    const data = await getWeather(lat, lon);
+function buildLegend() {
+  const leg = document.getElementById('map-legend');
+  if (!leg) return;
+  leg.innerHTML = allCategories.slice(0, 4).map((cat, i) =>
+    `<div class="it"><span class="sw" style="background:${CAT_COLORS[i % CAT_COLORS.length]}"></span>${cat.name}</div>`
+  ).join('') + `<div class="it" style="color:var(--muted)"><i class="fas fa-circle-notch"></i> 5 km</div>`;
+}
 
-    if (!document.getElementById(`weather-widget-${placeId}`)) return;
-    
-    if (!data) {
-        container.innerHTML = `<span style="color:#666; font-size:0.9em;">Không cập nhật được thời tiết.</span>`;
-        return;
-    }
+function renderPanelList(places) {
+  const results = document.getElementById('panel-results');
+  const countEl = document.getElementById('res-count');
+  const subEl   = document.getElementById('panel-sub');
+  if (countEl) countEl.textContent = String(places.length).padStart(2, '0');
+  if (subEl)   subEl.textContent   = `${String(places.length).padStart(2,'0')} địa điểm · sắp xếp theo độ nổi bật`;
+  if (!results) return;
 
-    const temp = Math.round(data.main.temp); 
-    const desc = data.weather[0].description; 
-    const descCapitalized = desc.charAt(0).toUpperCase() + desc.slice(1);
-    const iconCode = data.weather[0].icon;
-    const iconUrl = `https://openweathermap.org/img/wn/${iconCode}@4x.png`;  
-    const humidity = data.main.humidity; 
-    const windSpeed = data.wind.speed; 
+  results.innerHTML = '';
+  if (places.length === 0) {
+    results.innerHTML = '<p style="text-align:center;color:var(--muted);padding:20px">Không tìm thấy địa điểm nào.</p>';
+    return;
+  }
 
-    container.innerHTML = `
-        <div style="
-            background: #E0F7FA; 
-            padding: 15px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
-            border: 1px solid #b2ebf2;
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between;
-            transition: transform 0.2s;
-        ">
-            <div style="display: flex; align-items: center;">
-                <img src="${iconUrl}" alt="Icon" style="width: 60px; height: 60px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));">
-                <div style="margin-left: 5px;">
-                    <div style="font-size: 2.2em; font-weight: 800; color: #006064; line-height: 1;">${temp}°</div>
-                    <div style="font-size: 0.85em; color: #00838f; margin-top: 3px; font-weight: 500;">${descCapitalized}</div>
-                </div>
-            </div>
+  places.forEach((p, i) => {
+    const catIdx   = allCategories.findIndex(c => c.id === p.category?.id);
+    const catColor = CAT_COLORS[catIdx >= 0 ? catIdx % CAT_COLORS.length : 0];
+    const img      = getImageUrl(p.imageUrl);
+    const rating   = p.averageRating > 0 ? p.averageRating.toFixed(1) : '—';
+    const dist     = userPosition && p.latitude && p.longitude
+      ? getDistance(userPosition.lat, userPosition.lng, p.latitude, p.longitude).toFixed(1) + ' km'
+      : '';
+    const district = p.location ? p.location.split(',').slice(-2, -1)[0]?.trim() || 'Hà Nội' : 'Hà Nội';
 
-            <div style="
-                text-align: right; 
-                font-size: 0.85em; 
-                color: #555; 
-                border-left: 1px solid #ddd; 
-                padding-left: 15px;
-                min-width: 90px;
-            ">
-                <div style="margin-bottom: 5px;">
-                    <i class="fas fa-tint" style="color: #0288d1;"></i> Ẩm: <b>${humidity}%</b>
-                </div>
-                <div>
-                    <i class="fas fa-wind" style="color: #78909c;"></i> Gió: <b>${windSpeed}m/s</b>
-                </div>
-            </div>
+    const el = document.createElement('div');
+    el.className = 'pc';
+    el.style.animationDelay = (i * 40) + 'ms';
+    el.dataset.id = p.id;
+    el.innerHTML = `
+      <img src="${img}" alt="${p.name}" onerror="this.src=window.__ph"/>
+      <div class="body">
+        <div class="row1">
+          <div class="name">${p.name}</div>
+          <div class="num">#${String(i + 1).padStart(2, '0')}</div>
         </div>
-    `;
-}
-
-function renderCategoryDropdown() {
-    const dropdown = document.getElementById("categoryDropdown");
-    if (!dropdown) return;
-    dropdown.innerHTML = `<option value="">Tất cả loại hình</option>`;
-    
-    allCategories.forEach(cat => {
-        const opt = document.createElement("option");
-        opt.value = cat.id;
-        opt.textContent = cat.name;
-        dropdown.appendChild(opt);
+        <div class="meta">
+          <span class="star"><i class="fas fa-star"></i> ${rating}</span>
+          ${dist ? `<span class="sep"></span><span>${dist}</span>` : ''}
+          <span class="sep"></span>
+          <span>${district}</span>
+        </div>
+        <div class="tags">
+          <span class="tag ${i < 2 ? 'hot' : ''}">${p.category?.name || 'Khác'}</span>
+        </div>
+      </div>
+      <button class="heart" aria-label="Yêu thích"><i class="far fa-heart"></i></button>`;
+    el.addEventListener('click', e => {
+      if (e.target.closest('.heart')) {
+        e.stopPropagation();
+        handleToggleFavorite(p.id, el.querySelector('.heart'));
+        return;
+      }
+      showDetail(p.id);
     });
-
-    dropdown.onchange = () => {
-        const catId = dropdown.value;
-        const filtered = catId ? allPlaces.filter(p => p.category?.id == catId) : allPlaces;
-        
-        renderMarkers(filtered);
-    };
+    results.appendChild(el);
+  });
 }
 
+export function renderAllMarkers(places) {
+  if (!map) return;
+  Object.values(mapMarkers).forEach(m => map.removeLayer(m));
+  mapMarkers = {};
+  if (!places?.length) return;
+  places.forEach(p => {
+    if (!p.latitude || !p.longitude) return;
+    const catIdx = allCategories.findIndex(c => c.id === p.category?.id);
+    const color  = CAT_COLORS[catIdx >= 0 ? catIdx % CAT_COLORS.length : 0];
+    const m = L.marker([p.latitude, p.longitude], { icon: makePin(color, false) }).addTo(map);
+    m.on('click', () => showDetail(p.id));
+    mapMarkers[p.id] = m;
+  });
+}
+
+async function showDetail(placeId) {
+  const p = allPlaces.find(x => x.id === placeId);
+  if (!p) return;
+  currentPlaceId = placeId;
+  window.__currentPlaceId = placeId;
+  incrementView(placeId);
+
+  Object.entries(mapMarkers).forEach(([id, m]) => {
+    const pl = allPlaces.find(x => x.id == id);
+    if (!pl) return;
+    const catIdx = allCategories.findIndex(c => c.id === pl.category?.id);
+    const color  = CAT_COLORS[catIdx >= 0 ? catIdx % CAT_COLORS.length : 0];
+    m.setIcon(makePin(color, +id === placeId));
+  });
+
+  if (map) map.flyTo([p.latitude, p.longitude], 16, { duration: .8 });
+
+  const detail = document.getElementById('detail');
+  detail.style.display = 'flex';
+  detail.style.animation = 'none'; void detail.offsetWidth; detail.style.animation = 'detailIn .4s var(--ease) both';
+
+  const imgUrl = getImageUrl(p.imageUrl);
+  document.getElementById('detail-hero').style.backgroundImage =
+    `linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.58)), url(${imgUrl})`;
+
+  document.getElementById('d-name').textContent = p.name;
+  document.getElementById('d-addr').textContent = p.location || 'Hà Nội';
+  document.getElementById('d-badge').textContent = p.category?.name || 'Nổi bật';
+  document.getElementById('d-rating').innerHTML = p.averageRating > 0 ? `${p.averageRating.toFixed(1)}<small>/5</small>` : `—`;
+
+  const dist = userPosition && p.latitude
+    ? getDistance(userPosition.lat, userPosition.lng, p.latitude, p.longitude).toFixed(1)
+    : null;
+  const viewsEl = document.getElementById('d-views');
+  if (viewsEl) viewsEl.innerHTML = dist ? `${dist}<small>km</small>` : `—`;
+
+  const favBtn = document.getElementById('btn-fav-detail');
+  const isFav  = await getFavoriteStatus(placeId);
+  favBtn.innerHTML = `<i class="${isFav ? 'fas' : 'far'} fa-heart"></i>`;
+  favBtn.className = `btn-ghost${isFav ? ' fav-on' : ''}`;
+  favBtn.onclick   = async () => {
+    await handleToggleFavorite(placeId, favBtn);
+    const nowFav = await getFavoriteStatus(placeId);
+    favBtn.innerHTML = `<i class="${nowFav ? 'fas' : 'far'} fa-heart"></i>`;
+    favBtn.className = `btn-ghost${nowFav ? ' fav-on' : ''}`;
+  };
+
+  document.getElementById('btn-route').onclick = () => showRoute(p.latitude, p.longitude);
+
+  loadEvents(placeId);
+  loadReviews(placeId);
+}
+
+async function loadEvents(placeId) {
+  const el = document.getElementById('d-events');
+  const events = await fetchEvents(placeId);
+  if (!events.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--muted)">Hiện chưa có sự kiện nào.</p>';
+    return;
+  }
+  el.innerHTML = events.map(ev => `
+    <div class="event-card">
+      <div class="ev-date">
+        <span class="day">${new Date(ev.startDate).getDate()}</span>
+        <span class="mon">Th${new Date(ev.startDate).getMonth() + 1}</span>
+      </div>
+      <div class="ev-info">
+        <h5>${ev.eventName}</h5>
+        <p>${new Date(ev.startDate).toLocaleDateString('vi-VN')} — ${new Date(ev.endDate).toLocaleDateString('vi-VN')}</p>
+        <p>${ev.description || ''}</p>
+      </div>
+    </div>`).join('');
+}
+
+async function loadReviews(placeId) {
+  const el = document.getElementById('d-reviews');
+  const reviews = await fetchReviews(placeId);
+
+  const avatarsEl = document.getElementById('d-avatars');
+  const countEl   = document.getElementById('d-review-count');
+  const quoteEl   = document.getElementById('d-quote');
+  const rcountEl  = document.getElementById('d-rcount');
+  if (rcountEl) rcountEl.innerHTML = `${reviews.length}<small></small>`;
+  if (countEl)  countEl.textContent = `${reviews.length} đánh giá`;
+  if (avatarsEl) {
+    avatarsEl.innerHTML = reviews.slice(0, 3).map(r => {
+      const initials = (r.user?.fullName || 'U').split(' ').map(w => w[0]).slice(-2).join('').toUpperCase();
+      return `<div class="av">${initials}</div>`;
+    }).join('') + (reviews.length > 3 ? `<div class="av">+${reviews.length - 3}</div>` : '');
+  }
+  if (quoteEl) quoteEl.textContent = reviews[0]?.content || 'Chưa có đánh giá nào.';
+
+  if (!reviews.length) {
+    el.innerHTML = `<p style="font-size:12px;color:var(--muted)">Chưa có đánh giá nào.</p>`;
+    return;
+  }
+  const userId = JSON.parse(localStorage.getItem('currentUser') || '{}')?.id;
+  el.innerHTML = reviews.slice(0, 3).map(r => {
+    const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+    const imgs  = (r.images || []).map(img =>
+      `<img src="${BASE_URL}/uploads/${img.url.replace(/^\/uploads\//, '')}" onerror="this.src=window.__ph"/>`
+    ).join('');
+    const canDel = userId && (r.user?.id == userId);
+    return `
+      <div class="review-item">
+        <div class="rv-head">
+          <span class="rv-user">${r.user?.fullName || 'Khách'}</span>
+          <span class="rv-stars">${stars}</span>
+          ${canDel ? `<button onclick="deleteReview(${r.id})" style="font-size:11px;color:var(--muted)"><i class="fas fa-trash"></i></button>` : ''}
+        </div>
+        <div class="rv-text">${r.content || ''}</div>
+        ${imgs ? `<div class="rv-imgs">${imgs}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+window.deleteReview = async function(reviewId) {
+  if (!confirm('Xóa đánh giá này?')) return;
+  const token = localStorage.getItem('token');
+  const r = await fetch(`${BASE_URL}/api/reviews/${reviewId}`, {
+    method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (r.ok) loadReviews(currentPlaceId);
+  else alert('Xóa thất bại');
+};
+
+function closeDetail() {
+  document.getElementById('detail').style.display = 'none';
+  currentPlaceId = null;
+  Object.entries(mapMarkers).forEach(([id, m]) => {
+    const pl = allPlaces.find(x => x.id == id);
+    if (!pl) return;
+    const catIdx = allCategories.findIndex(c => c.id === pl.category?.id);
+    const color  = CAT_COLORS[catIdx >= 0 ? catIdx % CAT_COLORS.length : 0];
+    m.setIcon(makePin(color, false));
+  });
+  if (routingControl && map) { map.removeControl(routingControl); routingControl = null; }
+}
+window.closeDetail = closeDetail;
+
+function showRoute(lat, lng) {
+  if (!navigator.geolocation) return alert('Trình duyệt không hỗ trợ GPS');
+  navigator.geolocation.getCurrentPosition(pos => {
+    if (routingControl) map.removeControl(routingControl);
+    routingControl = L.Routing.control({
+      waypoints: [L.latLng(pos.coords.latitude, pos.coords.longitude), L.latLng(lat, lng)],
+      routeWhileDragging: false, show: false, createMarker: () => null,
+      lineOptions: { styles: [{ color: '#1a1612', opacity: 1, weight: 5 }] }
+    }).addTo(map);
+  }, () => alert('Không lấy được vị trí'));
+}
 
 function setupSearch() {
-    const btn = document.querySelector(".search-bar button");
-    const input = document.querySelector(".search-bar input");
-    if (!btn || !input) return;
-
-    const handleSearch = () => {
-        const keyword = input.value.trim().toLowerCase(); 
-        const filtered = allPlaces.filter(p => p.name.toLowerCase().includes(keyword));
-        if (filtered.length === 0) alert(`Không tìm thấy: "${input.value}"`);
-        
-        // Chỉ truyền filtered
-        renderMarkers(filtered);
-    };
-
-    btn.onclick = handleSearch;
-    input.onkeydown = (e) => { if(e.key === "Enter") handleSearch(); };
+  const mainInput = document.getElementById('main-search');
+  const sbInput   = document.getElementById('sb-search-input');
+  const doSearch  = (keyword) => {
+    const kw = keyword.trim().toLowerCase();
+    const filtered = kw ? allPlaces.filter(p => p.name.toLowerCase().includes(kw)) : allPlaces;
+    if (kw && !filtered.length) alert(`Không tìm thấy: "${keyword}"`);
+    renderPanelList(filtered);
+    renderAllMarkers(filtered);
+  };
+  document.getElementById('btn-search-go')?.addEventListener('click', () => doSearch(mainInput?.value || ''));
+  mainInput?.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(mainInput.value); });
+  sbInput?.addEventListener('input', e => doSearch(e.target.value));
 }
 
+export function getPlaces()     { return allPlaces; }
+export function getCategories() { return allCategories; }
+export { renderAllMarkers as renderMarkers };

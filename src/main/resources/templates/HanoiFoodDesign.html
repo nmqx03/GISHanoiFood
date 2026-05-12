@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HanoiFood — WebGIS ẩm thực</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+<style>
+  :root{
+    --bg:#f6f2ec; --paper:#fbf8f3; --ink:#1a1612; --ink-2:#3b342c; --muted:#7a6f63; --line:#e6dfd4;
+    --sb-bg:#14110e; --sb-bg-2:#1c1814; --sb-line:#2a241e; --sb-text:#e8e1d4; --sb-muted:#8b8174;
+    --accent:oklch(0.58 0.16 35); --accent-2:oklch(0.66 0.14 55); --accent-soft:oklch(0.94 0.04 45); --accent-ink:oklch(0.32 0.10 30);
+    --shadow-sm:0 1px 2px rgba(20,15,10,.06),0 2px 8px rgba(20,15,10,.04);
+    --shadow-md:0 6px 24px -8px rgba(20,15,10,.18),0 2px 6px rgba(20,15,10,.06);
+    --shadow-lg:0 24px 60px -20px rgba(20,15,10,.28),0 8px 20px -8px rgba(20,15,10,.1);
+    --radius:14px; --radius-sm:10px; --radius-lg:22px;
+    --sb-w:280px;
+    --ease:cubic-bezier(.2,.7,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Be Vietnam Pro',system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,select,textarea{font:inherit;color:inherit}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25);background-clip:padding-box}
+
+  .app{display:grid;grid-template-columns:var(--sb-w) 1fr;height:100vh;width:100vw}
+
+  /* SIDEBAR */
+  .sb{background:var(--sb-bg);color:var(--sb-text);display:flex;flex-direction:column;border-right:1px solid var(--sb-line);position:relative;z-index:10}
+  .sb::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(800px 400px at -10% -10%,rgba(220,120,80,.10),transparent 60%),radial-gradient(600px 300px at 110% 110%,rgba(220,150,80,.06),transparent 60%)}
+  .sb-head{padding:22px 22px 14px;display:flex;align-items:center;gap:10px;position:relative}
+  .sb-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 6px 16px -6px rgba(220,90,40,.6);font-family:'Instrument Serif',serif;font-size:22px;line-height:1}
+  .sb-brand{line-height:1.05}
+  .sb-brand .b1{font-family:'Instrument Serif',serif;font-size:22px;letter-spacing:-.01em;color:#fff}
+  .sb-brand .b1 i{font-style:italic;color:var(--accent-2)}
+  .sb-brand .b2{font-size:11px;color:var(--sb-muted);letter-spacing:.16em;text-transform:uppercase;margin-top:2px}
+
+  .sb-search{margin:6px 16px 18px;background:var(--sb-bg-2);border:1px solid var(--sb-line);border-radius:12px;display:flex;align-items:center;gap:8px;padding:9px 12px;transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+  .sb-search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(220,100,60,.18)}
+  .sb-search i{color:var(--sb-muted);font-size:13px}
+  .sb-search input{flex:1;background:none;border:0;outline:none;color:#fff;font-size:13.5px}
+  .sb-search input::placeholder{color:var(--sb-muted)}
+  .sb-search kbd{font-family:'JetBrains Mono',monospace;font-size:10px;background:#000;border:1px solid var(--sb-line);color:var(--sb-muted);padding:2px 6px;border-radius:5px}
+
+  .sb-section{padding:14px 16px 6px}
+  .sb-section h4{font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--sb-muted);margin-bottom:8px;padding-left:8px}
+  .sb-nav{display:flex;flex-direction:column;gap:1px}
+  .sb-item{position:relative;display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:9px;color:var(--sb-text);font-size:13.5px;transition:background .18s var(--ease),color .18s var(--ease);text-align:left;width:100%}
+  .sb-item .ic{width:22px;display:grid;place-items:center;color:var(--sb-muted);font-size:13px;transition:color .18s var(--ease)}
+  .sb-item .badge{margin-left:auto;font-size:10.5px;padding:2px 7px;border-radius:20px;background:var(--sb-line);color:var(--sb-text);font-weight:500}
+  .sb-item .dot{margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--accent-2)}
+  .sb-item:hover{background:rgba(255,255,255,.04);color:#fff}
+  .sb-item:hover .ic{color:var(--accent-2)}
+  .sb-item.active{background:linear-gradient(90deg,rgba(220,100,60,.18),rgba(220,100,60,0) 80%);color:#fff}
+  .sb-item.active::before{content:"";position:absolute;left:-16px;top:6px;bottom:6px;width:3px;background:var(--accent);border-radius:0 4px 4px 0}
+  .sb-item.active .ic{color:var(--accent)}
+  .cat-dot{width:10px;height:10px;border-radius:3px}
+
+  .sb-foot{margin-top:auto;padding:14px 16px 18px;border-top:1px solid var(--sb-line)}
+  .user-card{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;transition:background .18s var(--ease);width:100%}
+  .user-card:hover{background:rgba(255,255,255,.04)}
+  .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#5b3a2a,#8a513a);display:grid;place-items:center;color:#fff;font-weight:600;font-size:13px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+  .user-card .meta{text-align:left}
+  .user-card .meta .n{color:#fff;font-size:13px;font-weight:500}
+  .user-card .meta .e{color:var(--sb-muted);font-size:11px}
+  .user-card .more{margin-left:auto;color:var(--sb-muted);padding:6px}
+
+  /* MAIN */
+  .main{position:relative;background:var(--bg);overflow:hidden}
+  #map{position:absolute;inset:0;z-index:1;background:#e8e0d2}
+
+  .topbar{position:absolute;top:18px;left:18px;right:18px;z-index:500;display:flex;align-items:center;gap:10px;pointer-events:none}
+  .topbar > *{pointer-events:auto}
+
+  .searchpill{flex:0 1 520px;background:var(--paper);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow-md);display:flex;align-items:center;padding:6px 6px 6px 18px;gap:10px;transition:box-shadow .25s var(--ease),border-color .2s var(--ease)}
+  .searchpill:focus-within{border-color:var(--accent);box-shadow:var(--shadow-lg)}
+  .searchpill > i{color:var(--muted);font-size:14px}
+  .searchpill input{flex:1;border:0;outline:none;background:none;font-size:14.5px;color:var(--ink);padding:8px 0}
+  .searchpill .pipe{width:1px;height:22px;background:var(--line)}
+  .searchpill .where{display:flex;align-items:center;gap:6px;color:var(--ink-2);font-size:13px;padding:6px 4px}
+  .searchpill .where i{color:var(--accent)}
+  .searchpill .go{background:var(--ink);color:#fff;width:36px;height:36px;border-radius:999px;display:grid;place-items:center;transition:transform .2s var(--ease),background .2s var(--ease)}
+  .searchpill .go:hover{background:var(--accent);transform:rotate(-8deg)}
+
+  .chips{display:flex;gap:8px;flex-wrap:nowrap;overflow:hidden}
+  .chip{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13px;color:var(--ink-2);box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:all .2s var(--ease)}
+  .chip:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:#d6cdbe}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .chip i{font-size:11px;color:var(--muted)}
+  .chip.on i{color:rgba(255,255,255,.7)}
+
+  .top-actions{margin-left:auto;display:flex;gap:8px}
+  .icon-btn{width:40px;height:40px;border-radius:12px;background:var(--paper);border:1px solid var(--line);box-shadow:var(--shadow-sm);display:grid;place-items:center;color:var(--ink-2);transition:all .2s var(--ease);position:relative}
+  .icon-btn:hover{color:var(--accent);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+  .icon-btn .pip{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+
+  .panel{position:absolute;top:80px;right:18px;bottom:18px;width:380px;z-index:400;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;animation:panelIn .5s var(--ease) both}
+  @keyframes panelIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+  .panel-tabs{display:flex;padding:14px 16px 0;gap:4px;border-bottom:1px solid var(--line)}
+  .panel-tab{padding:8px 12px;font-size:13px;color:var(--muted);border-radius:8px 8px 0 0;position:relative;font-weight:500}
+  .panel-tab.active{color:var(--ink)}
+  .panel-tab.active::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px}
+  .panel-tab .n{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);margin-left:6px}
+  .panel-tab.active .n{color:var(--accent)}
+  .panel-head{padding:14px 18px 10px;display:flex;align-items:center;justify-content:space-between}
+  .panel-head .ttl{font-family:'Instrument Serif',serif;font-size:24px;letter-spacing:-.01em;color:var(--ink);line-height:1.1}
+  .panel-head .ttl em{font-style:italic;color:var(--accent)}
+  .panel-head .sub{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .sort{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .panel-body{flex:1;overflow-y:auto;padding:6px 14px 14px}
+
+  .pc{position:relative;display:grid;grid-template-columns:84px 1fr;gap:12px;padding:10px;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow-sm);margin-bottom:10px;transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease);cursor:pointer;opacity:0;transform:translateY(8px);animation:cardIn .55s var(--ease) forwards}
+  @keyframes cardIn{to{opacity:1;transform:none}}
+  .pc:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:#d6cdbe}
+  .pc img{width:84px;height:84px;border-radius:10px;object-fit:cover;background:linear-gradient(135deg,#f0e3d2,#e6d4ba);box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
+  .pc .body{min-width:0;display:flex;flex-direction:column;gap:2px}
+  .pc .row1{display:flex;align-items:center;gap:6px}
+  .pc .name{font-family:'Instrument Serif',serif;font-size:18px;line-height:1.15;color:var(--ink);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pc .num{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--bg);border:1px solid var(--line);padding:2px 6px;border-radius:5px;flex-shrink:0;margin-left:auto}
+  .pc .meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:2px}
+  .pc .meta .star{color:#d68b2c}
+  .pc .meta .sep{width:3px;height:3px;border-radius:50%;background:var(--line)}
+  .pc .tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .pc .tag{font-size:10.5px;color:var(--ink-2);padding:2px 7px;border-radius:20px;background:var(--bg);border:1px solid var(--line)}
+  .pc .tag.hot{color:#fff;background:var(--accent);border-color:transparent}
+  .pc .heart{position:absolute;top:14px;right:14px;color:var(--muted);width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.85);display:grid;place-items:center;backdrop-filter:blur(6px);border:1px solid var(--line);transition:all .2s var(--ease)}
+  .pc .heart:hover{color:var(--accent);border-color:var(--accent);transform:scale(1.06)}
+  .pc.fav .heart{color:var(--accent)}
+  .pc.fav .heart i{font-weight:900}
+
+  .detail{position:absolute;left:18px;bottom:18px;z-index:450;width:380px;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;animation:detailIn .4s var(--ease) both}
+  @keyframes detailIn{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+  .detail .hero{height:148px;position:relative;background-size:cover;background-position:center;background-color:#3b342c}
+  .detail .badge-top{position:absolute;top:12px;left:12px;z-index:1;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);color:var(--ink);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;box-shadow:var(--shadow-sm)}
+  .detail .badge-top i{color:var(--accent)}
+  .detail .close-x{position:absolute;top:12px;right:12px;z-index:1;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.92);color:var(--ink-2);display:grid;place-items:center;backdrop-filter:blur(6px);box-shadow:var(--shadow-sm)}
+  .detail .hero-foot{position:absolute;left:16px;right:16px;bottom:12px;z-index:1;color:#fff}
+  .detail .hero-foot .name{font-family:'Instrument Serif',serif;font-size:28px;letter-spacing:-.01em;line-height:1.05}
+  .detail .hero-foot .addr{font-size:12px;opacity:.85;margin-top:4px}
+
+  .detail-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px}
+  .stat .l{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+  .stat .v{font-family:'Instrument Serif',serif;font-size:20px;color:var(--ink);margin-top:2px;letter-spacing:-.01em}
+  .stat .v small{font-family:'Be Vietnam Pro',sans-serif;font-size:10px;color:var(--muted);font-weight:500;margin-left:2px}
+
+  .detail-actions{display:grid;grid-template-columns:1fr auto auto;gap:8px}
+  .btn-primary{background:var(--ink);color:#fff;padding:11px 14px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13.5px;font-weight:500;transition:transform .2s var(--ease),background .2s var(--ease)}
+  .btn-primary:hover{background:var(--accent);transform:translateY(-1px)}
+  .btn-ghost{border:1px solid var(--line);background:#fff;color:var(--ink-2);padding:11px 12px;border-radius:10px;transition:all .2s var(--ease)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+  .review-row{display:flex;align-items:center;gap:10px}
+  .avatars{display:flex}
+  .avatars .av{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);border:2px solid var(--paper);margin-left:-7px;display:grid;place-items:center;font-size:10px;color:var(--accent-ink);font-weight:600}
+  .avatars .av:first-child{margin-left:0}
+  .review-row .t{font-size:12px;color:var(--muted);line-height:1.4}
+  .review-row .t b{color:var(--ink-2)}
+
+  .zoom{position:absolute;right:18px;bottom:18px;z-index:400;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;overflow:hidden}
+  .zoom button{width:38px;height:38px;color:var(--ink-2);transition:background .2s var(--ease)}
+  .zoom button:hover{background:var(--accent-soft);color:var(--accent)}
+  .zoom .div{height:1px;background:var(--line)}
+
+  .legend{position:absolute;left:18px;top:80px;z-index:400;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-md);padding:10px 12px;display:flex;gap:14px;align-items:center;font-size:11.5px;color:var(--ink-2)}
+  .legend .it{display:flex;align-items:center;gap:6px}
+  .legend .sw{width:9px;height:9px;border-radius:3px}
+
+  .pin-wrap{background:none!important;border:0!important}
+  .pin{width:34px;height:42px;position:relative;transition:transform .2s var(--ease)}
+  .pin .body{position:absolute;inset:0 0 8px 0;border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;border-bottom-left-radius:0;transform:rotate(-45deg);box-shadow:0 6px 14px -4px rgba(0,0,0,.4),inset 0 0 0 2px rgba(255,255,255,.9);display:grid;place-items:center;color:#fff}
+  .pin .body i{transform:rotate(45deg);font-size:13px}
+  .pin.active{transform:scale(1.18) translateY(-4px)}
+  .pin.active .body{background:var(--ink)!important;box-shadow:0 10px 22px -6px rgba(0,0,0,.55),inset 0 0 0 2px var(--accent)}
+  .pin .pulse{position:absolute;left:50%;top:55%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);opacity:.45;animation:pulse 1.6s ease-out infinite;z-index:-1}
+  @keyframes pulse{0%{transform:translate(-50%,-50%) scale(1);opacity:.45}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
+
+  .leaflet-container{background:#e8e0d2;font-family:'Be Vietnam Pro',sans-serif}
+  .leaflet-control-attribution{background:rgba(251,248,243,.85)!important;font-size:10px;color:var(--muted)!important;border-radius:6px;padding:2px 6px}
+  .leaflet-control-attribution a{color:var(--ink-2)!important}
+
+  @media (max-width: 980px){
+    :root{--sb-w:64px}
+    .sb-brand,.sb-search input,.sb-search kbd,.sb-section h4,.sb-item span:not(.ic):not(.dot):not(.badge),.sb-item .badge,.user-card .meta{display:none}
+    .sb-search{padding:9px;justify-content:center}
+    .sb-item{justify-content:center}
+    .panel,.detail{width:340px}
+  }
+  @media (max-width: 720px){
+    .panel{display:none}
+    .detail{left:12px;right:12px;bottom:12px;width:auto}
+    .topbar{left:12px;right:12px;flex-wrap:wrap}
+    .chips{order:3;width:100%;overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sb">
+    <div class="sb-head">
+      <div class="sb-mark"><span>H</span></div>
+      <div class="sb-brand">
+        <div class="b1">Hanoi<i>Food</i></div>
+        <div class="b2">WebGIS · 36 Phố</div>
+      </div>
+    </div>
+
+    <div class="sb-search">
+      <i class="fas fa-search"></i>
+      <input placeholder="Tìm kiếm nhanh…" />
+      <kbd>⌘K</kbd>
+    </div>
+
+    <div class="sb-section">
+      <h4>Khám phá</h4>
+      <nav class="sb-nav">
+        <button class="sb-item active"><span class="ic"><i class="fas fa-map"></i></span><span>Bản đồ</span><span class="dot"></span></button>
+        <button class="sb-item"><span class="ic"><i class="fas fa-fire"></i></span><span>Đang nổi bật</span><span class="badge">12</span></button>
+        <button class="sb-item"><span class="ic"><i class="fas fa-utensils"></i></span><span>Đặc sản Hà Nội</span></button>
+        <button class="sb-item"><span class="ic"><i class="fas fa-route"></i></span><span>Food tour</span></button>
+        <button class="sb-item"><span class="ic"><i class="fas fa-newspaper"></i></span><span>Cộng đồng</span></button>
+      </nav>
+    </div>
+
+    <div class="sb-section">
+      <h4>Bộ lọc loại hình</h4>
+      <nav class="sb-nav">
+        <button class="sb-item"><span class="ic"><span class="cat-dot" style="background:#d76a3a"></span></span><span>Phở &amp; bún</span><span class="badge">42</span></button>
+        <button class="sb-item"><span class="ic"><span class="cat-dot" style="background:#c08a2a"></span></span><span>Bánh mì</span><span class="badge">28</span></button>
+        <button class="sb-item"><span class="ic"><span class="cat-dot" style="background:#7a8a3a"></span></span><span>Cà phê</span><span class="badge">61</span></button>
+        <button class="sb-item"><span class="ic"><span class="cat-dot" style="background:#7d4a8a"></span></span><span>Chè &amp; tráng miệng</span><span class="badge">19</span></button>
+        <button class="sb-item"><span class="ic"><span class="cat-dot" style="background:#3a6a8a"></span></span><span>Hải sản</span><span class="badge">11</span></button>
+      </nav>
+    </div>
+
+    <div class="sb-section">
+      <h4>Của bạn</h4>
+      <nav class="sb-nav">
+        <button class="sb-item"><span class="ic"><i class="far fa-heart"></i></span><span>Yêu thích</span><span class="badge">7</span></button>
+        <button class="sb-item"><span class="ic"><i class="far fa-bookmark"></i></span><span>Lịch trình đã lưu</span></button>
+        <button class="sb-item"><span class="ic"><i class="fas fa-robot"></i></span><span>Trợ lý AI</span><span class="dot"></span></button>
+      </nav>
+    </div>
+
+    <div class="sb-foot">
+      <button class="user-card">
+        <div class="avatar">MN</div>
+        <div class="meta">
+          <div class="n">Minh Nguyễn</div>
+          <div class="e"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7b161215133b131a1514121d14141f550d15">[email&#160;protected]</a></div>
+        </div>
+        <span class="more"><i class="fas fa-ellipsis"></i></span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="map"></div>
+
+    <div class="topbar">
+      <div class="searchpill">
+        <i class="fas fa-search"></i>
+        <input placeholder="Quán phở ngon nhất Hà Nội…" />
+        <div class="pipe"></div>
+        <div class="where"><i class="fas fa-location-dot"></i> Hoàn Kiếm</div>
+        <button class="go" aria-label="search"><i class="fas fa-arrow-right"></i></button>
+      </div>
+
+      <div class="chips" id="chips">
+        <button class="chip on" data-cat="all"><i class="fas fa-circle-check"></i>Tất cả</button>
+        <button class="chip" data-cat="pho">Phở</button>
+        <button class="chip" data-cat="bun">Bún chả</button>
+        <button class="chip" data-cat="banhmi">Bánh mì</button>
+        <button class="chip" data-cat="cafe">Cà phê</button>
+        <button class="chip" data-cat="open"><i class="far fa-clock"></i>Đang mở</button>
+        <button class="chip" data-cat="rated"><i class="fas fa-star"></i>4.5+</button>
+      </div>
+
+      <div class="top-actions">
+        <button class="icon-btn" title="Phân tích vùng (GIS)"><i class="fas fa-bullseye"></i></button>
+        <button class="icon-btn" title="Vị trí của tôi"><i class="fas fa-location-arrow"></i></button>
+        <button class="icon-btn" title="Thông báo"><i class="far fa-bell"></i><span class="pip"></span></button>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="it"><span class="sw" style="background:#d76a3a"></span>Phở</div>
+      <div class="it"><span class="sw" style="background:#c08a2a"></span>Bánh mì</div>
+      <div class="it"><span class="sw" style="background:#7a8a3a"></span>Cà phê</div>
+      <div class="it"><span class="sw" style="background:#7d4a8a"></span>Chè</div>
+      <div class="it" style="color:var(--muted)"><i class="fas fa-circle-notch"></i> 5 km</div>
+    </div>
+
+    <aside class="panel" id="panel">
+      <div class="panel-tabs">
+        <button class="panel-tab active">Kết quả<span class="n" id="resCount">06</span></button>
+        <button class="panel-tab">Yêu thích<span class="n">07</span></button>
+        <button class="panel-tab">Gần đây<span class="n">12</span></button>
+      </div>
+
+      <div class="panel-head">
+        <div>
+          <div class="ttl">Phở Hà Nội <em>chọn lọc</em></div>
+          <div class="sub">06 địa điểm trong bán kính 2.4 km · sắp xếp theo độ nổi bật</div>
+        </div>
+        <button class="sort"><i class="fas fa-sort"></i> Phổ biến</button>
+      </div>
+
+      <div class="panel-body" id="results"></div>
+    </aside>
+
+    <div class="detail" id="detail" style="display:none">
+      <div class="hero" id="detail-hero">
+        <span class="badge-top"><i class="fas fa-fire"></i> <span id="d-badge">Top 3 Hoàn Kiếm</span></span>
+        <button class="close-x" onclick="closeDetail()"><i class="fas fa-xmark"></i></button>
+        <div class="hero-foot">
+          <div class="name" id="d-name">Phở Thìn Lò Đúc</div>
+          <div class="addr" id="d-addr">13 Lò Đúc, Hai Bà Trưng</div>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="stats">
+          <div class="stat"><div class="l">Đánh giá</div><div class="v" id="d-rating">4.7<small>/5</small></div></div>
+          <div class="stat"><div class="l">Khoảng giá</div><div class="v" id="d-price">60k<small>vnđ</small></div></div>
+          <div class="stat"><div class="l">Khoảng cách</div><div class="v" id="d-dist">0.8<small>km</small></div></div>
+        </div>
+
+        <div class="detail-actions">
+          <button class="btn-primary"><i class="fas fa-route"></i> Chỉ đường</button>
+          <button class="btn-ghost" title="Yêu thích"><i class="far fa-heart"></i></button>
+          <button class="btn-ghost" title="Chia sẻ"><i class="fas fa-share-nodes"></i></button>
+        </div>
+
+        <div class="review-row">
+          <div class="avatars">
+            <div class="av">LH</div><div class="av">QT</div><div class="av">MN</div><div class="av">+4</div>
+          </div>
+          <div class="t"><b>132 đánh giá</b> · "<span id="d-quote">Nước dùng ngọt thanh, thịt mềm, hành tươi.</span>"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zoom">
+      <button id="z-in" title="Phóng to"><i class="fas fa-plus"></i></button>
+      <div class="div"></div>
+      <button id="z-out" title="Thu nhỏ"><i class="fas fa-minus"></i></button>
+      <div class="div"></div>
+      <button id="z-c" title="Hà Nội"><i class="fas fa-compass"></i></button>
+    </div>
+  </main>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const PLACES = [
+  { id:1, name:"Phở Thìn",            addr:"13 Lò Đúc, Hai Bà Trưng",       cat:"pho", color:"#d76a3a", rating:4.7, reviews:132, price:"60k", dist:"0.8 km", tags:["Truyền thống","Đông khách"], img:"images/pho_thin.jpg",        lat:21.0140, lng:105.8570, badge:"Top 3 Hoàn Kiếm", quote:"Nước dùng ngọt thanh, thịt mềm, hành tươi." },
+  { id:2, name:"Phở Bát Đàn",         addr:"49 Bát Đàn, Hoàn Kiếm",         cat:"pho", color:"#d76a3a", rating:4.6, reviews:208, price:"55k", dist:"1.1 km", tags:["Cổ truyền","Xếp hàng"],     img:"images/pho_bat_dan.jpg",     lat:21.0345, lng:105.8475, badge:"Lâu năm",         quote:"Bánh phở mềm, nước trong, thịt bò ngon." },
+  { id:3, name:"Phở Lý Quốc Sư",      addr:"10 Lý Quốc Sư, Hoàn Kiếm",      cat:"pho", color:"#d76a3a", rating:4.5, reviews:412, price:"70k", dist:"1.4 km", tags:["Du khách","Phở gà"],         img:"images/pho_ly_quoc_su.jpg",  lat:21.0306, lng:105.8472, badge:"Phở gà số 1",     quote:"Phở gà ngọt nhẹ, thịt dai vừa, đậm đà." },
+  { id:4, name:"Phở Sướng",           addr:"24B Trung Yên, Hoàn Kiếm",      cat:"pho", color:"#d76a3a", rating:4.6, reviews:189, price:"60k", dist:"1.7 km", tags:["Đậm đà","Buổi sáng"],        img:"images/pho_suong.jpg",       lat:21.0322, lng:105.8530, badge:"Yêu thích",       quote:"Quán nhỏ trong ngõ, nước phở rất Hà Nội." },
+  { id:5, name:"Phở Gánh Hàng Chiếu", addr:"Hàng Chiếu, Hoàn Kiếm",         cat:"pho", color:"#d76a3a", rating:4.4, reviews:97,  price:"45k", dist:"2.0 km", tags:["Vỉa hè","Khuya"],            img:"images/pho_ganh.jpg",        lat:21.0379, lng:105.8516, badge:"Phở đêm",         quote:"Phở gánh đêm, ấm và mộc mạc." },
+  { id:6, name:"Phở Cường",           addr:"23 Hàng Muối, Hoàn Kiếm",       cat:"pho", color:"#d76a3a", rating:4.5, reviews:81,  price:"55k", dist:"2.4 km", tags:["Tươi","Sạch"],               img:"images/pho_cuong.jpg",       lat:21.0375, lng:105.8540, badge:"Sạch sẽ",         quote:"Phở thịt bò mềm, không gian thoáng." }
+];
+
+const map = L.map('map', { zoomControl:false, attributionControl:true })
+  .setView([21.0325, 105.8505], 14);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO',
+  maxZoom:19, subdomains:'abcd'
+}).addTo(map);
+
+function makePin(color, active=false){
+  const html = `<div class="pin ${active?'active':''}">
+      <div class="pulse" style="background:${color}"></div>
+      <div class="body" style="background:${color}"><i class="fas fa-utensils"></i></div>
+    </div>`;
+  return L.divIcon({ className:'pin-wrap', html, iconSize:[34,42], iconAnchor:[17,42] });
+}
+
+const markers = {};
+PLACES.forEach(p=>{
+  const m = L.marker([p.lat,p.lng], { icon: makePin(p.color, false) }).addTo(map);
+  m.on('click', ()=> selectPlace(p.id));
+  markers[p.id] = m;
+});
+
+const results = document.getElementById('results');
+function renderResults(filter='all'){
+  results.innerHTML = '';
+  const list = filter==='all' ? PLACES : PLACES.filter(p=> p.cat===filter);
+  list.forEach((p,i)=>{
+    const el = document.createElement('div');
+    el.className = 'pc';
+    el.style.animationDelay = (i*60)+'ms';
+    el.innerHTML = `
+      <img src="${p.img}" alt="${p.name}" onerror="this.style.visibility='hidden'"/>
+      <div class="body">
+        <div class="row1">
+          <div class="name">${p.name}</div>
+          <div class="num">#${String(p.id).padStart(2,'0')}</div>
+        </div>
+        <div class="meta">
+          <span class="star"><i class="fas fa-star"></i> ${p.rating}</span>
+          <span>(${p.reviews})</span>
+          <span class="sep"></span>
+          <span>${p.price}</span>
+          <span class="sep"></span>
+          <span>${p.dist}</span>
+        </div>
+        <div class="tags">
+          ${p.tags.map((t,k)=>`<span class="tag ${k===0&&i<2?'hot':''}">${t}</span>`).join('')}
+        </div>
+      </div>
+      <button class="heart" aria-label="Yêu thích"><i class="far fa-heart"></i></button>`;
+    el.addEventListener('click', e=>{
+      if(e.target.closest('.heart')){
+        el.classList.toggle('fav');
+        const ic = el.querySelector('.heart i');
+        ic.classList.toggle('far'); ic.classList.toggle('fas');
+        return;
+      }
+      selectPlace(p.id);
+    });
+    results.appendChild(el);
+  });
+  document.getElementById('resCount').textContent = String(list.length).padStart(2,'0');
+}
+renderResults();
+
+document.querySelectorAll('#chips .chip').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    document.querySelectorAll('#chips .chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+    const cat = c.dataset.cat;
+    if(['all','pho','bun','banhmi','cafe'].includes(cat)) renderResults(cat==='all'?'all':cat);
+  });
+});
+
+document.querySelectorAll('.sb-nav').forEach(nav=>{
+  nav.querySelectorAll('.sb-item').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      nav.querySelectorAll('.sb-item').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+});
+
+let activeId = null;
+function selectPlace(id){
+  const p = PLACES.find(x=>x.id===id); if(!p) return;
+  activeId = id;
+  Object.entries(markers).forEach(([k,m])=>{
+    const place = PLACES.find(x=>x.id==k);
+    m.setIcon(makePin(place.color, +k===id));
+  });
+  map.flyTo([p.lat,p.lng], 16, { duration:.7 });
+  const d = document.getElementById('detail');
+  d.style.display = 'flex';
+  d.style.animation = 'none'; void d.offsetWidth; d.style.animation='detailIn .4s var(--ease) both';
+  document.getElementById('detail-hero').style.backgroundImage =
+    `linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.55)), url(${p.img})`;
+  document.getElementById('d-name').textContent = p.name;
+  document.getElementById('d-addr').textContent = p.addr;
+  document.getElementById('d-rating').innerHTML = `${p.rating}<small>/5</small>`;
+  document.getElementById('d-price').innerHTML = `${p.price.replace('k','')}k<small>vnđ</small>`;
+  document.getElementById('d-dist').innerHTML = `${p.dist.replace(' km','')}<small>km</small>`;
+  document.getElementById('d-badge').textContent = p.badge;
+  document.getElementById('d-quote').textContent = p.quote;
+}
+function closeDetail(){
+  document.getElementById('detail').style.display='none';
+  activeId = null;
+  Object.entries(markers).forEach(([k,m])=>{
+    const place = PLACES.find(x=>x.id==k);
+    m.setIcon(makePin(place.color, false));
+  });
+}
+
+document.getElementById('z-in').onclick  = ()=> map.zoomIn();
+document.getElementById('z-out').onclick = ()=> map.zoomOut();
+document.getElementById('z-c').onclick   = ()=> map.flyTo([21.0325,105.8505],14,{duration:.6});
+
+setTimeout(()=> selectPlace(1), 500);
+</script>
+</body>
+</html>

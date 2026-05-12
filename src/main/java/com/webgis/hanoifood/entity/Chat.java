@@ -19,8 +19,19 @@ public class Chat {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String answer;
 
+    // Cột message trong DB = alias của question (để tương thích schema cũ)
+    // Dùng insertable=false, updatable=false để JPA không ghi đè
+    @Column(name = "message", columnDefinition = "TEXT",
+            insertable = false, updatable = false)
+    private String message;
+
+    // Cột role trong DB, mặc định 'USER' (set ở DB level)
+    // Dùng insertable=false, updatable=false để JPA không cần truyền
+    @Column(name = "role", insertable = false, updatable = false)
+    private String role;
+
     @Column(name = "message_type")
-    private String messageType; 
+    private String messageType;
 
     @Column(name = "structured_data", columnDefinition = "TEXT")
     private String structuredData;
@@ -28,7 +39,6 @@ public class Chat {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-  
     public Chat() {
         this.createdAt = LocalDateTime.now();
     }
@@ -42,7 +52,6 @@ public class Chat {
         this.createdAt = LocalDateTime.now();
     }
 
-  
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -54,6 +63,10 @@ public class Chat {
 
     public String getAnswer() { return answer; }
     public void setAnswer(String answer) { this.answer = answer; }
+
+    public String getMessage() { return message; }
+
+    public String getRole() { return role; }
 
     public String getMessageType() { return messageType; }
     public void setMessageType(String messageType) { this.messageType = messageType; }

@@ -25,19 +25,28 @@ export function clearMarkers() {
     Object.values(layerGroups).forEach(group => group.clearLayers());
 }
 
+const PLACE_PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+  <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.3 21.7 0 14 0z"
+        fill="#27ae60" stroke="white" stroke-width="2.5"/>
+  <circle cx="14" cy="14" r="5.5" fill="white" opacity="0.92"/>
+</svg>`;
+
+const PLACE_ICON = L.divIcon({
+    className: '',
+    html: PLACE_PIN_SVG,
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -38]
+});
+
 export function renderMarkers(places) {
     clearMarkers();
     if (!places || places.length === 0) return;
 
     places.forEach(place => {
         const categoryName = place.category?.name || "Địa điểm khác";
-        const iconUrl = place.category?.icon ? `${BASE_URL}/${place.category.icon}` : 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png';
 
-        const customIcon = L.icon({
-            iconUrl, iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32]
-        });
-
-        const marker = L.marker([place.latitude, place.longitude], { icon: customIcon });
+        const marker = L.marker([place.latitude, place.longitude], { icon: PLACE_ICON });
         marker.bindPopup(`
             <div style="text-align:center">
                 <b>${place.name}</b><br>
@@ -71,7 +80,13 @@ export function showRouteTo(lat, lng) {
             routeWhileDragging: false,
             show: false,
             createMarker: () => null,
-            lineOptions: { styles: [{color: '#e67e22', opacity: 0.7, weight: 5}] }
+            lineOptions: {
+                styles: [
+                    { color: '#1a6bff', opacity: 0.15, weight: 20 },
+                    { color: '#2979ff', opacity: 0.40, weight: 12 },
+                    { color: '#1565c0', opacity: 1.00, weight:  5 }
+                ]
+            }
         }).on('routesfound', e => {
             updateRoutingUI(e.routes[0].summary, e.routes[0].instructions);
         }).addTo(map);
@@ -156,58 +171,54 @@ export function initMapEvents() {
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
         btn.disabled = true;
 
-        let isFirstFix = true;
         let watchId = null;
-        let timeoutId = null;
+        let bestAccuracy = Infinity;
+        let fixReceived = false;
 
-        // CHIẾN LƯỢC 2 BƯỚC:
-        // 1. Lấy vị trí nhanh (low accuracy) trong 5s đầu để fly to map ngay
-        // 2. Tiếp tục theo dõi GPS chính xác cao trong 30s để refine vị trí
+        const stopWatch = () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+        };
 
-        // Bước 1: Lấy vị trí nhanh từ Wi-Fi/Cell tower (~3s)
-        navigator.geolocation.getCurrentPosition(
+        // Stop watching after 30s to save battery
+        const batteryTimeout = setTimeout(stopWatch, 30000);
+
+        // Single watchPosition with maximumAge:0 ensures the first callback always
+        // delivers a fresh fix — eliminates the stale-cache bug that required two clicks.
+        watchId = navigator.geolocation.watchPosition(
             pos => {
                 const { latitude, longitude, accuracy } = pos.coords;
-                console.log(`[GPS Fast] lat=${latitude}, lng=${longitude}, accuracy=${Math.round(accuracy)}m`);
-                
-                showUserLocation(latitude, longitude, accuracy, true);
-                map.flyTo([latitude, longitude], 16, { duration: 1.0 });
-                
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
+                const isFirstFix = !fixReceived;
 
-                // Bước 2: Tiếp tục theo dõi để cải thiện độ chính xác
-                let bestAccuracy = accuracy;
-                watchId = navigator.geolocation.watchPosition(
-                    p => {
-                        const { latitude: la, longitude: ln, accuracy: ac } = p.coords;
-                        console.log(`[GPS Refine] accuracy=${Math.round(ac)}m`);
-                        
-                        // Chỉ cập nhật nếu chính xác hơn đáng kể
-                        if (ac < bestAccuracy * 0.7) {
-                            bestAccuracy = ac;
-                            showUserLocation(la, ln, ac, ac > 50);
-                        }
-                    },
-                    e => console.warn("Watch error:", e.message),
-                    { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-                );
+                if (isFirstFix) {
+                    fixReceived = true;
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                    map.flyTo([latitude, longitude], 16, { duration: 1.0 });
+                }
 
-                // Dừng theo dõi sau 30s để tiết kiệm pin
-                timeoutId = setTimeout(() => {
-                    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-                }, 30000);
+                // Always show on first fix; refine only when meaningfully more accurate
+                if (isFirstFix || accuracy < bestAccuracy * 0.8) {
+                    bestAccuracy = accuracy;
+                    showUserLocation(latitude, longitude, accuracy, accuracy > 30);
+                }
+
+                // Accuracy good enough — stop refining after a brief grace period
+                if (accuracy <= 30) {
+                    clearTimeout(batteryTimeout);
+                    setTimeout(stopWatch, 3000);
+                }
             },
             err => {
+                clearTimeout(batteryTimeout);
+                stopWatch();
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
                 handleGeolocationError(err);
             },
-            { 
-                enableHighAccuracy: false,  // Cho phép lấy nhanh từ Wi-Fi
-                timeout: 15000,
-                maximumAge: 30000  // Cho phép dùng lại vị trí cache 30s
-            }
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
     });
 }

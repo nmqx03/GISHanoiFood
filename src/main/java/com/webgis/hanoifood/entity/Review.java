@@ -13,10 +13,10 @@ public class Review {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // place_id: cột đang dùng trong code hiện tại
     @ManyToOne
     @JoinColumn(name = "place_id")
-    
-    @JsonIgnoreProperties({"reviews"}) 
+    @JsonIgnoreProperties({"reviews"})
     private Place place;
 
     @ManyToOne
@@ -32,7 +32,13 @@ public class Review {
 
     @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReviewImage> images;
-    
+
+    // restaurant_id: cột cũ còn trong DB, không dùng trong code
+    // insertable=false, updatable=false để JPA không ghi vào
+    @Column(name = "restaurant_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private Integer restaurantId;
+
     public Review() {
     }
 
@@ -46,62 +52,26 @@ public class Review {
         this.createdAt = createdAt;
     }
 
-	public Long getId() {
-		return id;
-	}
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    public Place getPlace() { return place; }
+    public void setPlace(Place place) { this.place = place; }
 
-	public Place getPlace() {
-		return place;
-	}
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
-	public void setPlace(Place place) {
-		this.place = place;
-	}
+    public Integer getRating() { return rating; }
+    public void setRating(Integer rating) { this.rating = rating; }
 
-	public User getUser() {
-		return user;
-	}
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
 
-	public void setUser(User user) {
-		this.user = user;
-	}
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-	public Integer getRating() {
-		return rating;
-	}
+    public List<ReviewImage> getImages() { return images; }
+    public void setImages(List<ReviewImage> images) { this.images = images; }
 
-	public void setRating(Integer rating) {
-		this.rating = rating;
-	}
-
-	public String getContent() {
-		return content;
-	}
-
-	public void setContent(String content) {
-		this.content = content;
-	}
-
-	public LocalDateTime getCreatedAt() {
-		return createdAt;
-	}
-
-	public void setCreatedAt(LocalDateTime createdAt) {
-		this.createdAt = createdAt;
-	}
-
-	public List<ReviewImage> getImages() {
-		return images;
-	}
-
-	public void setImages(List<ReviewImage> images) {
-		this.images = images;
-	}
-
-    
+    public Integer getRestaurantId() { return restaurantId; }
 }
-
